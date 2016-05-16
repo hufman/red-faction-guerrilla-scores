@@ -1,3 +1,12 @@
+var PromiseAll = function() {
+  var promise = m.deferred();
+  m.sync(arguments).then(function(datas) {
+    promise.resolve(datas[datas.length - 1]);
+  }, function(errors) {
+    promise.reject(errors[errors.length - 1]);
+  });
+  return promise.promise;
+}
 var scores = (function() {
   var foleyMarkers = {}  // cue name mapped to a list of timestamps
                           // indicating acceptable times to transition
@@ -41,7 +50,7 @@ var scores = (function() {
       }
     }).then(function(data) {foleyMarkers = data;});
   };
-  loadFoleyMarkers();
+  var loadingFoleyMarkers = loadFoleyMarkers();
 
   var loadScore = function(name) {
     var scoreMetadata = songs[name];
@@ -55,7 +64,7 @@ var scores = (function() {
     var _p = function(filename) {
       return path + '/' + filename;
     };
-    return m.request({method:'GET', url:_p(score),
+    var loadingScore = m.request({method:'GET', url:_p(score),
       deserialize: function(data) {
         var parser = new DOMParser();
         var doc = parser.parseFromString(data, 'application/xml');
@@ -142,6 +151,7 @@ var scores = (function() {
 
       return mtbl;
     });
+    return PromiseAll(loadingFoleyMarkers, loadingScore);
   };
 
   return {
