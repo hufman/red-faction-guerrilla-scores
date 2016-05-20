@@ -468,13 +468,27 @@ var GUI = {
     }
     if (e.keyCode==37) { // left
       GUI.changeChoice(-1);
+      e.preventDefault();
     }
     if (e.keyCode==39) { // right
       GUI.changeChoice(1);
+      e.preventDefault();
     }
   },
   view: function() {
     var playback = musicEngine['playbackState'];
+    var viewState = function(statename) {
+      if (statename == playback['nextState']) {
+        return m('option', {'value':statename, 'selected': true}, statename);
+      } else {
+        return m('option', {'value':statename}, statename);
+      }
+    };
+    var viewStates = function() {
+      return m('select', {onchange: m.withAttr('value', musicEngine.setState)},
+        musicEngine.getStates().map(viewState)
+      );
+    };
     var viewNextCue = function(cuename) {
       if (cuename == playback['nextCue']) {
         return m('p.cue.selected', cuename);
@@ -487,6 +501,8 @@ var GUI = {
     };
     return m('div', [
       m('p', "Current state: " + playback['currentState']),
+      m('p', "Desired State:"),
+      viewStates(),
       m('p', "Current cue: " + playback['currentCue']),
       m('p', "Next cue:"),
       viewCueChoices()
