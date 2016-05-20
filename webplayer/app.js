@@ -183,6 +183,7 @@ var musicEngine = (function(scores){
   var foleyMarkers = scores['foleyMarkers'];
   var scoreData = null;
   var playback = {};
+  var subscribers = [];
 
   var clear = function() {
     for (var key in playback) {
@@ -222,6 +223,38 @@ var musicEngine = (function(scores){
     }
     playback['nextState'] = state;
     nextChoices();
+  };
+  var getChoices = function() {
+    var ret = []
+    for (var i=0; i<playback['nextChoices'].length; i++) {
+      var cue = playback['nextChoices'][i];
+      if (cue.hasOwnProperty('probability')) {
+        ret.push(cue['name']);
+      } else {
+        ret.push(cue);
+      }
+    }
+    return ret;
+  };
+  var setChoice = function(choice) {
+    var found = false;
+    var choices = getChoices();
+    i = choices.indexOf(choice);
+    if (i==-1) {
+      throw new RangeError("Invalid choice "+choice);
+    }
+    playback['nextCue'] = choice;
+    console.log("Chose %s", playback['nextCue']);
+    scheduleNext();
+    sendNotify();
+  };
+  var onNotify = function(callback) {
+    subscribers.push(callback)
+  };
+  var sendNotify = function(data) {
+    for (var i=0; i<subscribers.length; i++) {
+      subscribers[i](data);
+    }
   };
 
   var nextChoices = function() {
@@ -281,6 +314,7 @@ var musicEngine = (function(scores){
     playback['nextCue'] = randomWeightedChoice(playback['nextChoices']);
     console.log("Picked %s", playback['nextCue']);
     scheduleNext();
+    sendNotify();
   };
   var scheduleNext = function() {
     /* start preloading nextAudio */
@@ -375,8 +409,8 @@ var musicEngine = (function(scores){
     }
     // swap the next into current
     console.log("Starting to play next");
-    playback['currentState'] = playback['nextState'];
     playback['currentCue'] = playback['nextCue'];
+    playback['currentState'] = scoreData['cues'][playback['currentCue']]['state'];
     playback['currentAudio'] = playback['nextAudio'];
     delete playback['nextCue'];
     delete playback['nextAudio'];
@@ -384,6 +418,7 @@ var musicEngine = (function(scores){
     playback['currentAudio'].addEventListener('pause', onPause);
     playback['currentAudio'].addEventListener('waiting', onPause);
     playback['currentAudio'].play();
+    sendNotify();
   };
 
   var loadScore = function(name) {
@@ -404,8 +439,64 @@ var musicEngine = (function(scores){
     stop: stop,
     getStates: getStates,
     setState: setState,
+    getChoices: getChoices,
+    setChoice: setChoice,
+    onNotify: onNotify,
     playbackState: playback
   };
 })(scores);
 
 musicEngine.loadScore('Uprising');
+
+var GUI = {
+  changeChoice: function(dir) {
+    var i = musicEngine.getChoices().indexOf(musicEngine['playbackState']['nextCue']);
+    if (i >= 0) {
+      i += dir;
+      i = Math.min(i, musicEngine['playbackState']['nextChoices'].length-1);
+      i = Math.max(i, 0);
+      musicEngine.setChoice(musicEngine.getChoices()[i]);
+    }
+  },
+  onkey: function(e) {
+    if (e.keyCode==32) { // space
+      if (musicEngine['playbackState']['currentStart']) {
+        musicEngine.stop();
+      } else {
+        musicEngine.play();
+      }
+    }
+    if (e.keyCode==37) { // left
+      GUI.changeChoice(-1);
+    }
+    if (e.keyCode==39) { // right
+      GUI.changeChoice(1);
+    }
+  },
+  view: function() {
+    var playback = musicEngine['playbackState'];
+    var viewNextCue = function(cuename) {
+      if (cuename == playback['nextCue']) {
+        return m('p.cue.selected', cuename);
+      } else {
+        return m('p.cue', cuename);
+      }
+    };
+    var viewCueChoices = function() {
+      return musicEngine.getChoices().map(viewNextCue);
+    };
+    return m('div', [
+      m('p', "Current state: " + playback['currentState']),
+      m('p', "Current cue: " + playback['currentCue']),
+      m('p', "Next cue:"),
+      viewCueChoices()
+    ]);
+  }
+};
+document.addEventListener('DOMContentLoaded', function(e) {
+  m.mount(document.body, GUI);
+  document.body.addEventListener('keydown', GUI.onkey);
+  musicEngine.onNotify(function() {
+    m.redraw();
+  });
+});
