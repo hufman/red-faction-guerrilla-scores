@@ -214,6 +214,9 @@ var musicEngine = (function(scores){
       playback['currentAudio'].pause();
     }
   };
+  var skip = function() {
+    scheduleNextFuture(true);
+  };
   var getStates = function() {
     return Object.keys(scoreData['states']);
   };
@@ -326,7 +329,6 @@ var musicEngine = (function(scores){
     if (! playback['currentAudio']) {  // nothing is currently loaded to play
       scheduleNextImmediately();
     } else {  // there is something lined up
-      cancelNextFuture(); // clear out any previous timers
       // if it's playing, schedule it now
       if (playback['currentStart']) {
         console.log("Currently playing, schedule next cue");
@@ -345,11 +347,12 @@ var musicEngine = (function(scores){
     nextAudio.addEventListener('canplay', loadListener);
     console.log("Scheduling initial playback ASAP");
   };
-  var scheduleNextFuture = function() {
+  var scheduleNextFuture = function(soon) {
     var currentTime = playback['currentAudio'].currentTime;
     var currentFoleys = foleyMarkers[playback['currentCue']];
     var jumpPoint = 0;
-    if (playback['currentState'] == playback['nextState']) { // play to the end
+    cancelNextFuture(); // clear out any previous timers
+    if (!soon && playback['currentState'] == playback['nextState']) { // play to the end
       playback['transition'] = 'fade';
       jumpPoint = currentFoleys[currentFoleys.length-1];
     } else {  // shortcut
@@ -437,6 +440,7 @@ var musicEngine = (function(scores){
     loadScore: loadScore,
     play: play,
     stop: stop,
+    skip: skip,
     getStates: getStates,
     setState: setState,
     getChoices: getChoices,
@@ -465,6 +469,11 @@ var GUI = {
       } else {
         musicEngine.play();
       }
+      e.preventDefault();
+    }
+    if (e.keyCode==13) { // enter
+      musicEngine.skip();
+      e.preventDefault();
     }
     if (e.keyCode==37) { // left
       GUI.changeChoice(-1);
