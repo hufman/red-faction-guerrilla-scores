@@ -369,6 +369,7 @@ var musicEngine = (function(scores){
       }
       console.log("Cutting to next cue at %f, which is after %f", jumpPoint, currentTime);
     }
+    currentTime = playback['currentAudio'].currentTime;
     var delay = jumpPoint - currentTime;
     playback['playNextTimer'] = window.setTimeout(playNext, delay*1000.0);
     console.log("Scheduled next cue for %f", delay);
