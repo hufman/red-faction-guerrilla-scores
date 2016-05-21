@@ -324,8 +324,14 @@ var musicEngine = (function(scores){
     console.log("Preloading next cue %s", playback['nextCue']);
     var cue = scoreData['cues'][playback['nextCue']];
     playback['nextAudio'] = document.createElement('audio');
-    playback['nextAudio'].setAttribute('src', cue['path'] + '.opus');
     playback['nextAudio'].setAttribute('preload', 'auto');
+    var formats = {'opus':'audio/ogg; codecs="opus"', 'mp3':'audio/mpeg'}
+    for (var ext in formats) {
+      var src = document.createElement('source');
+      src.setAttribute('src', cue['path'] + '.' + ext);
+      src.setAttribute('type', formats[ext]);
+      playback['nextAudio'].appendChild(src);
+    }
     if (! playback['currentAudio']) {  // nothing is currently loaded to play
       scheduleNextImmediately();
     } else {  // there is something lined up
