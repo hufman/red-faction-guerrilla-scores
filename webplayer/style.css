@@ -4,6 +4,7 @@
   margin: 4px;
   border-radius: 6px;
   border: 2px solid #222222;
+  cursor: pointer;
 }
 .cue.selected {
   border-color: #66aa66;

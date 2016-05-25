@@ -506,10 +506,13 @@ var GUI = {
       );
     };
     var viewNextCue = function(cuename) {
+      var options = {
+        'onclick': m.withAttr('innerHTML', musicEngine.setChoice)
+      };
       if (cuename == playback['nextCue']) {
-        return m('p.cue.selected', cuename);
+        return m('p.cue.selected', options, cuename);
       } else {
-        return m('p.cue', cuename);
+        return m('p.cue', options, cuename);
       }
     };
     var viewCueChoices = function() {
