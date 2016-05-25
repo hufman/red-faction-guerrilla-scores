@@ -363,15 +363,15 @@ var musicEngine = (function(scores){
     var jumpPoint = 0;
     cancelNextFuture(); // clear out any previous timers
     if (!soon && playback['currentState'] == playback['nextState']) { // play to the end
-      playback['transition'] = 'fade';
+      playback['transition'] = 'ending';
       jumpPoint = currentFoleys[currentFoleys.length-1];
     } else {  // shortcut
       // find the earliest foley that is after the currentTime
       for (var i=currentFoleys.length-1; i>=0; i--) {
         if (i == currentFoleys.length-1) {
-          playback['transition'] = 'fade';
+          playback['transition'] = 'ending';
         } else {
-          playback['transition'] = 'stop';
+          playback['transition'] = 'fade';
         }
         if (currentFoleys[i] > currentTime) {
           jumpPoint = currentFoleys[i];
@@ -416,8 +416,8 @@ var musicEngine = (function(scores){
       playback['currentAudio'].removeEventListener('pause', onPause);
       playback['currentAudio'].removeEventListener('waiting', onPause);
       // fade out the previous thing, if necessary
-      if (playback['transition'] != 'fade') {
-        playback['currentAudio'].pause();
+      if (playback['transition'] == 'fade') {
+        fadeout(playback['currentAudio'])
       }
       playback['previousAudio'] = playback['currentAudio'];
     }
@@ -433,6 +433,20 @@ var musicEngine = (function(scores){
     playback['currentAudio'].addEventListener('waiting', onPause);
     playback['currentAudio'].play();
     sendNotify();
+  };
+  var fadeout = function(audio) {
+    var length = 2.0;
+    var step = 0.1;
+    var interval = length / step;
+    var fadeDown = function() {
+      audio.volume -= step;
+      if (audio.volume > 0) {
+        setTimeout(fadeDown, interval);
+      } else {
+        audio.pause();
+      }
+    };
+    fadeDown();
   };
 
   var loadScore = function(name) {
