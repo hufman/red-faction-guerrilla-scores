@@ -439,11 +439,11 @@ var musicEngine = (function(scores){
     var step = 0.1;
     var interval = length / step;
     var fadeDown = function() {
-      audio.volume -= step;
-      if (audio.volume > 0) {
+      var vol = audio.volume;
+      vol -= step;
+      if (vol > 0) {
+        audio.volume = vol;
         setTimeout(fadeDown, interval);
-      } else {
-        audio.pause();
       }
     };
     fadeDown();
