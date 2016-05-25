@@ -2,8 +2,12 @@
 
 import sys
 
-filename = "mus_prog_1.names"
+filename = sys.argv[1]
 file = open(filename,'r')
+offset = 0
+
+if len(sys.argv)>2:
+  offset = int(sys.argv[2], 16)
 
 for i,name in enumerate(file.readlines()):
-  print('%08x.wav %s.wav' % (i, name.strip()))
+  print('%08x.wav %s.wav' % (offset+i, name.strip()))
