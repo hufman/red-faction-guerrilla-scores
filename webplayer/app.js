@@ -15,6 +15,11 @@ var scores = (function() {
       name: 'Uprising',
       path: 'mus_progression_01',
       file: 'mus_progression_01.mtbl'
+    },
+    'Mission Capstone': {
+      name: 'Mission Capstone',
+      path: 'mus_progression_01',
+      file: 'mus_mission_capstone.mtbl'
     }
   };
   var list = Object.keys(songs);
@@ -193,7 +198,6 @@ var musicEngine = (function(scores){
   var init = function() {
     /* various first time startup things for a score */
     playback['currentState'] = scoreData['firstState'];
-    playback['currentState'] = 'MUS_PROGRESSION_01_COMBAT_LIGHT';
     playback['nextState'] = playback['currentState'];
     playback['nextChoices'] = scoreData['states'][playback['currentState']]['firstClips'];
     pickNextChoice();
@@ -457,7 +461,7 @@ var musicEngine = (function(scores){
   };
 })(scores);
 
-musicEngine.loadScore('Uprising');
+musicEngine.loadScore('Mission Capstone');
 
 var GUI = {
   changeChoice: function(dir) {
