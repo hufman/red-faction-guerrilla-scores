@@ -8,7 +8,7 @@ filename = sys.argv[1]
 tree = ET.parse(filename)
 
 title = tree.find('.//SCORE/NAME').text
-g_main = graphviz.Digraph(title, engine='neato', format='svg')
+g_main = graphviz.Digraph(title, format='svg')
 
 states = {}
 
@@ -61,4 +61,5 @@ for g_state in states.values():
   g_main.subgraph(g_state)
 
 # render
-states.values()[0].render('testoutput')
+#states.values()[0].render('testoutput')
+g_main.render('testoutput')
