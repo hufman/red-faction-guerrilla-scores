@@ -293,12 +293,23 @@ var musicEngine = (function(scores){
       var outs = scoreData['states'][playback['currentState']]['transitionsOut'];
       var outClips = outs[playback['currentCue']] || [];
       var validOuts = [];
-      for (var i=0; i<outClips.length; i++) {
-        var outClipName = outClips[i];
-        var outClipData = scoreData['cues'][outClipName];
-        var outClipNextName = outClipData['nextCues'][0]['name'];
-        if (scoreData['cues'][outClipNextName]['state'] == playback['nextState']) {
-          validOuts.push(outClips[i]);
+      if (outClips.length > 0) {
+        // moving from normal to a transition
+        for (var i=0; i<outClips.length; i++) {
+          var outClipName = outClips[i];
+          var outClipData = scoreData['cues'][outClipName];
+          var outClipNextName = outClipData['nextCues'][0]['name'];
+          if (scoreData['cues'][outClipNextName]['state'] == playback['nextState']) {
+            validOuts.push(outClips[i]);
+          }
+        }
+      } else {
+        // finishing a transition
+        var nextCue = cueData['nextCues'][0] || {};
+        var nextCueName = nextCue['name'];
+        var nextCueData = scoreData['cues'][nextCueName] || {};
+        if (nextCueData['state'] == playback['nextState']) {
+          validOuts = cueData['nextCues'];
         }
       }
       // if we have transitions, use them
