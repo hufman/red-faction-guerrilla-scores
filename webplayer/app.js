@@ -369,7 +369,7 @@ var musicEngine = (function(scores){
     console.log("Scheduling initial playback ASAP");
   };
   var scheduleNextFuture = function(soon) {
-    var currentTime = playback['currentAudio'].currentTime;
+    var currentTime = Date.now()/1000.0 - playback['currentStart'];
     var currentFoleys = foleyMarkers[playback['currentCue']];
     var jumpPoint = 0;
     cancelNextFuture(); // clear out any previous timers
@@ -390,7 +390,6 @@ var musicEngine = (function(scores){
       }
       console.log("Cutting to next cue at %f, which is after %f", jumpPoint, currentTime);
     }
-    currentTime = playback['currentAudio'].currentTime;
     var delay = jumpPoint - currentTime;
     playback['playNextTimer'] = window.setTimeout(playNext, delay*1000.0);
     console.log("Scheduled next cue for %f", delay);
