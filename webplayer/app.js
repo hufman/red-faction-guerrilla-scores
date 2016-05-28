@@ -376,6 +376,26 @@ var musicEngine = (function(scores){
     if (!soon && playback['currentState'] == playback['nextState']) { // play to the end
       playback['transition'] = 'ending';
       jumpPoint = currentFoleys[currentFoleys.length-1];
+    } else if (playback['currentState'].indexOf('AMBIENCE')>=0 && playback['nextState'].indexOf('AMBIENCE')>=0) {
+      // cut if the next foley is later than 15 seconds
+      var MAX_WAIT = 15;
+      var EARLY_JUMP = 5;
+      playback['transition'] = 'fade';
+      for (var i=0; i<currentFoleys.length; i++) {
+        if (currentFoleys[i] < currentTime) {
+          continue;
+        }
+        if (currentFoleys[i] < currentTime+MAX_WAIT) {
+          jumpPoint = currentFoleys[i];
+          break;
+        }
+        if (currentFoleys[i] >= currentTime+MAX_WAIT) {
+          break;
+        }
+      }
+      if (jumpPoint == 0) {
+        jumpPoint = currentTime+EARLY_JUMP;
+      }
     } else {  // shortcut
       // find the earliest foley that is after the currentTime
       for (var i=currentFoleys.length-1; i>=0; i--) {
@@ -445,7 +465,7 @@ var musicEngine = (function(scores){
     sendNotify();
   };
   var fadeout = function(audio) {
-    var length = 2.0;
+    var length = 5.0;
     var step = 0.1;
     var interval = length / step;
     var fadeDown = function() {
@@ -454,6 +474,9 @@ var musicEngine = (function(scores){
       if (vol > 0) {
         audio.volume = vol;
         setTimeout(fadeDown, interval);
+      } else {
+        audio.currentTime = audio.duration;
+        audio.pause();
       }
     };
     fadeDown();
@@ -485,7 +508,8 @@ var musicEngine = (function(scores){
   };
 })(scores);
 
-musicEngine.loadScore('Mission Capstone');
+//musicEngine.loadScore('Mission Capstone');
+musicEngine.loadScore('Uprising');
 
 var GUI = {
   changeChoice: function(dir) {
