@@ -9,3 +9,33 @@
 .cue.selected {
   border-color: #66aa66;
 }
+.cue-progress {
+  border: none;
+  background-color: #33cc66;
+  height: 3px;
+}
+.cue-foley {
+  border: none;
+  background-color: #3366cc;
+  height: 3px;
+  width: 2px;
+  display: inline-block;
+  position: relative;
+}
+@keyframes cue-progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes cue-progress-alt {
+  /* alternate keyframe set to handle restarting animation */
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}

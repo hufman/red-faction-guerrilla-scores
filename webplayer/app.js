@@ -456,6 +456,7 @@ var musicEngine = (function(scores){
     playback['currentCue'] = playback['nextCue'];
     playback['currentState'] = scoreData['cues'][playback['currentCue']]['state'];
     playback['currentAudio'] = playback['nextAudio'];
+    playback['currentFoleys'] = foleyMarkers[playback['currentCue']];
     delete playback['nextCue'];
     delete playback['nextAudio'];
     playback['currentAudio'].addEventListener('play', onPlay);
@@ -512,6 +513,8 @@ var musicEngine = (function(scores){
 musicEngine.loadScore('Uprising');
 
 var GUI = {
+  animationPreviousCue: '',
+  animationName: 'cue-progress',
   changeChoice: function(dir) {
     var i = musicEngine.getChoices().indexOf(musicEngine['playbackState']['nextCue']);
     if (i >= 0) {
@@ -561,6 +564,47 @@ var GUI = {
         musicEngine.getStates().map(viewState)
       );
     };
+    var cueProgress = function() {
+      if (! playback['currentAudio']) {
+        return null;
+      }
+      if (playback['currentCue'] != GUI.animationPreviousCue) {
+        GUI.animationPreviousCue = playback['currentCue'];
+        if (GUI.animationName == 'cue-progress') {
+          GUI.animationName = 'cue-progress-alt';
+        } else {
+          GUI.animationName = 'cue-progress';
+        }
+      }
+      var cueName = playback['currentCue'];
+      var duration = playback['currentAudio'].duration;
+      var currentTime = Date.now()/1000.0 - playback['currentStart'];
+      var remaining = duration - currentTime;
+      var currentPerc = 100.0 * currentTime / duration;
+      var jumpPoints = playback['currentFoleys'].map(function(f) {
+        return 100.0 * f / duration;
+      });
+      return m('p.cue', [
+        cueName,
+        m('div.cue-progress-container', [
+          m('div.cue-progress', {
+            'style': {
+              'animation-name': GUI.animationName,
+              'animation-duration': duration.toFixed(3)+'s',
+              //'animation-delay': '-'+currentTime.toFixed(3)+'s',
+              'animation-timing-function': 'linear'
+            }
+          }),
+          jumpPoints.map(function(j) {
+            return m('span.cue-foley', {
+              'style': {
+                'left': j+'%'
+              }
+            });
+          })
+        ])
+      ]);
+    };
     var viewNextCue = function(cuename) {
       var options = {
         'onclick': m.withAttr('innerHTML', musicEngine.setChoice)
@@ -579,7 +623,8 @@ var GUI = {
       m('p', "Current state: " + playback['currentState']),
       m('p', "Desired State:"),
       viewStates(),
-      m('p', "Current cue: " + playback['currentCue']),
+      m('p', "Current cue:"),
+      cueProgress(),
       m('p', "Next cue:"),
       viewCueChoices()
     ]);
