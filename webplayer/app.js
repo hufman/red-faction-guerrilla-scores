@@ -513,7 +513,10 @@ var musicEngine = (function(scores){
 musicEngine.loadScore('Uprising');
 
 var GUI = {
-  animationPreviousCue: '',
+  animationPrevious: {
+    'cueName': '',
+    'time': 0
+  },
   animationName: 'cue-progress',
   changeChoice: function(dir) {
     var i = musicEngine.getChoices().indexOf(musicEngine['playbackState']['nextCue']);
@@ -531,6 +534,7 @@ var GUI = {
       } else {
         musicEngine.play();
       }
+      m.redraw();
       e.preventDefault();
     }
     if (e.keyCode==13) { // enter
@@ -568,35 +572,48 @@ var GUI = {
       if (! playback['currentAudio']) {
         return null;
       }
-      if (playback['currentCue'] != GUI.animationPreviousCue) {
-        GUI.animationPreviousCue = playback['currentCue'];
+      var setStart = false;
+      if ((playback['currentCue'] != GUI.animationPrevious['name']) ||
+          (Date.now() > GUI.animationPrevious['time'] + 50)) {
+        setStart = true;
+        GUI.animationPrevious['time'] = Date.now();
+        GUI.animationPrevious['name'] = playback['currentCue'];
         if (GUI.animationName == 'cue-progress') {
           GUI.animationName = 'cue-progress-alt';
         } else {
           GUI.animationName = 'cue-progress';
         }
+      } else if (Date.now() < GUI.animationPrevious['time'] + 20) {
+        // redraw right after the previous redraw
+        setStart = true;
       }
       var cueName = playback['currentCue'];
       var duration = playback['currentAudio'].duration;
-      var currentTime = Date.now()/1000.0 - playback['currentStart'];
+      var currentTime = playback['currentAudio'].currentTime;
+      var playState = playback['currentAudio'].paused ? 'paused' : 'running';
       var remaining = duration - currentTime;
       var currentPerc = 100.0 * currentTime / duration;
       var jumpPoints = playback['currentFoleys'].map(function(f) {
         return 100.0 * f / duration;
       });
+      var animStyle = {
+        'animation-name': GUI.animationName,
+        'animation-duration': duration.toFixed(3)+'s',
+        'animation-timing-function': 'linear',
+        'animation-play-state': playState
+      };
+      if (setStart) {
+        animStyle['animation-delay'] = '-'+currentTime.toFixed(3)+'s'
+      }
+
       return m('p.cue', [
         cueName,
         m('div.cue-progress-container', [
           m('div.cue-progress', {
-            'style': {
-              'animation-name': GUI.animationName,
-              'animation-duration': duration.toFixed(3)+'s',
-              //'animation-delay': '-'+currentTime.toFixed(3)+'s',
-              'animation-timing-function': 'linear'
-            }
+            'style': animStyle
           }),
           jumpPoints.map(function(j) {
-            return m('span.cue-foley', {
+            return m('div.cue-foley', {
               'style': {
                 'left': j+'%'
               }
