@@ -205,9 +205,12 @@ var musicEngine = (function(scores){
   var play = function() {
     /* Start playing audio */
     console.log("Resuming playback");
-    if (playback['currentAudio'] &&
-        playback['currentAudio'].paused) {
-      playback['currentAudio'].play();
+    if (playback['currentAudio']) {
+      if (playback['currentAudio'].paused) {
+        playback['currentAudio'].play();
+      }
+    } else if (playback['nextAudio']) { // loading the next cue
+      playback['nextAudio'].load()
     }
   };
   var stop = function() {
@@ -351,7 +354,7 @@ var musicEngine = (function(scores){
       scheduleNextImmediately();
     } else {  // there is something lined up
       // if it's playing, schedule it now
-      if (playback['currentStart']) {
+      if (playback['playing']) {
         console.log("Currently playing, schedule next cue");
         scheduleNextFuture();
       };
@@ -422,6 +425,7 @@ var musicEngine = (function(scores){
   var playNext = function() {
     // callbacks for start/stop
     var onPlay = function() {
+      playback['playing'] = true;
       playback['currentStart'] = Date.now()/1000.0 - playback['currentAudio'].currentTime;
       console.log("Recording start time: %s", playback['currentStart']);
       // playback started, prepare the next song
@@ -431,13 +435,16 @@ var musicEngine = (function(scores){
         // resume from pause, reschedule
         scheduleNextFuture();
       }
+      sendNotify();
     };
     var onPause = function(e) {
-      if (this.ended) {
+      if (!this.paused || this.ended) {
         return;
       }
       // buffer underrun, or manual pause
+      playback['playing'] = false;
       playback['currentStart'] = null;
+      sendNotify();
       cancelNextFuture();
     };
     if (playback['currentAudio']) {
@@ -529,7 +536,7 @@ var GUI = {
   },
   onkey: function(e) {
     if (e.keyCode==32) { // space
-      if (musicEngine['playbackState']['currentStart']) {
+      if (musicEngine['playbackState']['playing']) {
         musicEngine.stop();
       } else {
         musicEngine.play();
@@ -555,6 +562,13 @@ var GUI = {
     var about = function() {
       return m('div',
         "Red Faction: Guerrilla is an open-world action game from 2009 with a unique background audio system. Instead of playing a simple loop, it arranges a set of clips into a dynamically shifting score that reacts to the game's intensity level. As the player health decreases and more enemies appear, the game plays a smooth transition to a more intense set of background music. This page is a demonstration of this dynamic soundtrack.");
+    };
+    var playbackControls = function() {
+      if (playback['playing']) {
+        return m('button', {'onclick': musicEngine.stop}, 'Pause')
+      } else {
+        return m('button', {'onclick': musicEngine.play}, 'Play')
+      }
     };
     var viewState = function(statename) {
       if (statename == playback['nextState']) {
@@ -637,6 +651,7 @@ var GUI = {
     };
     return m('div', [
       about(),
+      m('p', playbackControls()),
       m('p', "Current state: " + playback['currentState']),
       m('p', "Desired State:"),
       viewStates(),
