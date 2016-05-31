@@ -225,6 +225,7 @@ var musicEngine = (function(scores){
         !playback['currentAudio'].paused) {
       playback['currentAudio'].pause();
     }
+    cancelNextFuture();
   };
   var skip = function() {
     scheduleNextFuture(true);
@@ -513,6 +514,7 @@ var musicEngine = (function(scores){
 
   return {
     loadScore: loadScore,
+    scoreData: scoreData,
     play: play,
     stop: stop,
     skip: skip,
@@ -571,6 +573,17 @@ var GUI = {
     var about = function() {
       return m('div',
         "Red Faction: Guerrilla is an open-world action game from 2009 with a unique background audio system. Instead of playing a simple loop, it arranges a set of clips into a dynamically shifting score that reacts to the game's intensity level. As the player health decreases and more enemies appear, the game plays a smooth transition to a more intense set of background music. This page is a demonstration of this dynamic soundtrack.");
+    };
+    var scoreSelector = function() {
+      return m('select', {onchange: m.withAttr('value', musicEngine.loadScore)},
+        scores.list.map(function(s) {
+          if ((musicEngine['scoreData']||{})['name'] == s) {
+            return m('option', {'value': s, 'selected': true}, s);
+          } else {
+            return m('option', {'value': s}, s);
+          }
+        })
+      );
     };
     var playbackControls = function() {
       if (playback['playing']) {
@@ -660,6 +673,8 @@ var GUI = {
     };
     return m('div', [
       about(),
+      m('p', "Current score:"),
+      scoreSelector(),
       m('p', playbackControls()),
       m('p', "Current state: " + playback['currentState']),
       m('p', "Desired State:"),
