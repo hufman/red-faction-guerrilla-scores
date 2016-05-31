@@ -35,15 +35,15 @@ var scores = (function() {
       },
       unwrapSuccess: function(doc) {
         var results = {};
-        var nodes = doc.evaluate('.//File', doc);
+        var nodes = doc.evaluate('.//File', doc, null, XPathResult.ANY_TYPE, null);
         var node = nodes.iterateNext();
         while (node) {
-          var name = doc.evaluate('./Name', node, null, XPathResult.STRING_TYPE).stringValue
+          var name = doc.evaluate('./Name', node, null, XPathResult.STRING_TYPE, null).stringValue;
           var times = [];
-          var markers = doc.evaluate('./Marker', node);
+          var markers = doc.evaluate('./Marker', node, null, XPathResult.ANY_TYPE, null);
           var markerNode = markers.iterateNext();
           while (markerNode) {
-            var timeNode = doc.evaluate('./Time_Offset', markerNode, null, XPathResult.NUMBER_TYPE)
+            var timeNode = doc.evaluate('./Time_Offset', markerNode, null, XPathResult.NUMBER_TYPE, null);
             var time = timeNode.numberValue / 1000.0;
             times.push(time);
             markerNode = markers.iterateNext();
@@ -81,19 +81,19 @@ var scores = (function() {
         if (query.indexOf('/') == -1) {
           query = './' + query;
         }
-        var nodes = doc.evaluate(query, context); var node;
+        var nodes = doc.evaluate(query, context, null, XPathResult.ANY_TYPE, null); var node;
         while ((node = nodes.iterateNext()) != null) {
           results.push(node.textContent);
         }
         return results;
       }
       // parse the mtbl
-      var scoreNode = doc.evaluate('.//SCORE', doc).iterateNext();
+      var scoreNode = doc.evaluate('.//SCORE', doc, null, XPathResult.ANY_TYPE, null).iterateNext();
       mtbl['firstState'] = allElementTexts(doc, scoreNode, 'FIRST_STATE')[0];
 
       // load all the states
       mtbl['states'] = {}	// keyed on state name
-      var stateNodes = doc.evaluate('./STATE', scoreNode); var stateNode;
+      var stateNodes = doc.evaluate('./STATE', scoreNode, null, XPathResult.ANY_TYPE, null); var stateNode;
       while ((stateNode = stateNodes.iterateNext()) != null) {
         var state = {}
         var name = allElementTexts(doc, stateNode, 'NAME')[0];
@@ -104,7 +104,7 @@ var scores = (function() {
 
         // load transition clips into this state
         state['transitionsIn'] = {};	// keyed on previous state name
-        var transitionNodes = doc.evaluate('./TRANSITION', stateNode); var transitionNode;
+        var transitionNodes = doc.evaluate('./TRANSITION', stateNode, null, XPathResult.ANY_TYPE, null); var transitionNode;
         while ((transitionNode = transitionNodes.iterateNext()) != null) {
           var fromName = allElementTexts(doc, transitionNode, 'FROM')[0];
           state['transitionsIn'][fromName] = allElementTexts(doc, transitionNode, 'CLIP');
@@ -112,7 +112,7 @@ var scores = (function() {
 
         // load transition clips out of this state
         state['transitionsOut'] = {};	// keyed on cue name
-        var transitionNodes = doc.evaluate('./TRANSITION_CLIP', stateNode); var transitionNode;
+        var transitionNodes = doc.evaluate('./TRANSITION_CLIP', stateNode, null, XPathResult.ANY_TYPE, null); var transitionNode;
         while ((transitionNode = transitionNodes.iterateNext()) != null) {
           var fromName = allElementTexts(doc, transitionNode, 'FROM_CLIP')[0];
           state['transitionsOut'][fromName] = allElementTexts(doc, transitionNode, 'CLIP');
@@ -141,7 +141,7 @@ var scores = (function() {
         return cues;
       }
       mtbl['cues'] = {}	// keyed on cue name
-      var clipNodes = doc.evaluate('./CLIP', scoreNode); var clipNode;
+      var clipNodes = doc.evaluate('./CLIP', scoreNode, null, XPathResult.ANY_TYPE, null); var clipNode;
       while ((clipNode = clipNodes.iterateNext()) != null) {
         var clip = {};
         var name = allElementTexts(doc, clipNode, 'NAME')[0];
@@ -225,7 +225,10 @@ var musicEngine = (function(scores){
     scheduleNextFuture(true);
   };
   var getStates = function() {
-    return Object.keys(scoreData['states']);
+    if (scoreData != null) {
+      return Object.keys(scoreData['states']);
+    }
+    return [];
   };
   var setState = function(state) {
     if (!scoreData['states'].hasOwnProperty(state)) {
@@ -236,7 +239,7 @@ var musicEngine = (function(scores){
   };
   var getChoices = function() {
     var ret = []
-    for (var i=0; i<playback['nextChoices'].length; i++) {
+    for (var i=0; i<(playback['nextChoices'] || []).length; i++) {
       var cue = playback['nextChoices'][i];
       if (cue.hasOwnProperty('probability')) {
         ret.push(cue['name']);
@@ -438,9 +441,10 @@ var musicEngine = (function(scores){
       sendNotify();
     };
     var onPause = function(e) {
-      if (!this.paused || this.ended) {
+      if (this != playback['currentAudio']) {
         return;
       }
+      console.log("Pause event from "+this.childNodes[0].src);
       // buffer underrun, or manual pause
       playback['playing'] = false;
       playback['currentStart'] = null;
