@@ -16,6 +16,11 @@ var scores = (function() {
       path: 'mus_progression_01',
       file: 'mus_progression_01.mtbl'
     },
+    'Subvert': {
+      name: 'Subvert',
+      path: 'mus_progression_01',
+      file: 'mus_mission_a.mtbl'
+    },
     'Mission Capstone': {
       name: 'Mission Capstone',
       path: 'mus_progression_01',
