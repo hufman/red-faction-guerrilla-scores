@@ -21,6 +21,16 @@ var scores = (function() {
       path: 'mus_progression_01',
       file: 'mus_mission_a.mtbl'
     },
+    'Mission Evade': {
+      name: 'Mission Evade',
+      path: 'mus_progression_01',
+      file: 'mus_mission_b.mtbl'
+    },
+    'Mission Destroy': {
+      name: 'Mission Destroy',
+      path: 'mus_progression_01',
+      file: 'mus_mission_c.mtbl'
+    },
     'Mission Capstone': {
       name: 'Mission Capstone',
       path: 'mus_progression_01',
