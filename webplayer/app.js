@@ -35,6 +35,11 @@ var scores = (function() {
       name: 'Mission Capstone',
       path: 'mus_progression_01',
       file: 'mus_mission_capstone.mtbl'
+    },
+    'Mission Final': {
+      name: 'Mission Final',
+      path: 'mus_progression_01',
+      file: 'mus_mission_final.mtbl'
     }
   };
   var list = Object.keys(songs);
