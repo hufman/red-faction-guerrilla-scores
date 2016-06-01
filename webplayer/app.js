@@ -171,7 +171,231 @@ var scores = (function() {
   };
 })()
 
-var musicEngine = (function(scores){
+var playbackEngine = (function() {
+  var formats = {'opus':'audio/ogg; codecs="opus"', 'mp3':'audio/mpeg'}
+  var playing = false;		// whether we are currently playing or trying to play
+  var previousAudio = null;	// any previous audio clip that is fading out
+  var currentStart = null;	// time (in seconds) when the currentClip started playing
+  var currentTime = null;	// when paused, this is when we paused the clip
+  var currentAudio = null;	// the current audio clip
+  var currentData = null;	// any supplementary data associated with the current clip
+  var transitionTime = null;	// when to do nextAudio.play(), after currentStart
+  var transitionType = null;	// what type of transition to do, 'fade' or 'ending'
+  var nextAudio = null;		// the next audio clip, that we are currently preloading
+  var nextLoaded = false;	// whether the next audio clip is loaded
+  var nextTimer = null;		// the timer that will do nextAudio.play()
+  var nextData = null;		// any supplementary data associated with the next clip
+  var subscriptions = [];
+
+  var play = function() {
+    console.log("Starting to play");
+    playing = true;
+    if (currentAudio && currentAudio.paused) {
+      currentAudio.play();
+      // onPlay will handle scheduleNext
+    } else if (nextAudio) {
+      // on initial play
+      scheduleNext();
+    } else {
+      console.log("Next audio isn't loaded yet, won't schedule next");
+    }
+    notify();
+  };
+  var pause = function() {
+    console.log("Pausing playback");
+    playing = false;
+    if (currentAudio && !currentAudio.paused) {
+      currentAudio.pause();
+    }
+    cancelTimer();
+    notify();
+  };
+  var reset = function() {
+    pause();
+    playing = false;
+    previousAudio = null;
+    currentStart = null;
+    currentTime = null;
+    currentAudio = null;
+    currentData = null;
+    transitionTime = null;
+    transitionType = null;
+    nextAudio = null;
+    nextLoaded = false;
+    nextTimer = null;
+    nextData = null;
+  };
+  var subscribe = function(callback) {
+    subscriptions.push(callback);
+  };
+  var notify = function(data) {
+    subscriptions.forEach(function(s) {
+      s(data);
+    });
+  };
+  var getPlayback = function() {
+    // return a view of the current playback data
+    var ret = {};
+    ret['playing'] = playing;
+    ret['nextLoaded'] = nextLoaded;
+    if (currentAudio) {
+      ret['currentTime'] = getCurrentTime();
+      ret['currentDuration'] = currentAudio.duration;
+      ret['currentData'] = currentData;
+    }
+    if (nextAudio) {
+      ret['nextData'] = nextData;
+    }
+    return ret
+  };
+
+  var getCurrentTime = function() {
+    if (currentStart) {
+      return Date.now()/1000.0 - currentStart;
+    } else {
+      return currentTime;
+    }
+  };
+  var setNextClip = function(offset, url, transition, data) {
+    // given a url without extension, start loading the next clip
+    // and schedule it at the offset into the current clip
+    if (nextAudio) {
+      nextAudio.removeEventListener('canplaythrough', onNextLoaded);
+      cancelTimer();
+    }
+    transitionType = transition;
+    transitionTime = offset;
+    nextData = data;
+    nextLoaded = false;
+    nextAudio = document.createElement('audio');
+    nextAudio.setAttribute('preload', 'auto');
+    for (var ext in formats) {
+      var src = document.createElement('source');
+      src.setAttribute('src', url + '.' + ext);
+      src.setAttribute('type', formats[ext]);
+      nextAudio.appendChild(src);
+    }
+    console.log("Starting to load next clip");
+    nextAudio.addEventListener('canplaythrough', onNextLoaded);
+    nextAudio.load();
+    notify();
+  };
+  var onNextLoaded = function(e) {
+    console.log("Next clip is loaded");
+    this.removeEventListener('canplaythrough', onNextLoaded);
+    nextLoaded = true;
+    // make sure the file is ready to go
+    this.volume = 0;
+    this.play();
+    this.pause();
+    this.currentTime = 0;
+    this.volume = 1;
+    if (playing) {
+      console.log("Scheduling next clip");
+      scheduleNext();
+    } else {
+      console.log("Not current playing, won't schedule next clip");
+    }
+    notify();
+  };
+  var scheduleNext = function() {
+    if (!nextAudio ||		// currentAudio.onPlay caused a new currentTime
+        !nextLoaded) {	// before we finished loading nextAudio
+      return;			// wait for onNextLoaded to trigger this
+    }
+    cancelTimer();
+    if (!currentAudio) {	// no loaded cue, start immediately
+      nextTimer = window.setTimeout(playNext, 0);
+    } else {
+      var currentTime = getCurrentTime();	// time into the clip
+      var delay = transitionTime - currentTime;
+      console.log("Next cue is ready to play in %f", delay);
+      nextTimer = window.setTimeout(playNext, delay*1000.0);
+    }
+  };
+  var cancelTimer = function() {
+    if (nextTimer) {
+      window.clearTimeout(nextTimer);
+      nextTimer = null;
+    }
+  };
+
+  var playNext = function() {
+    if (currentAudio) {
+      // clear callbacks
+      currentAudio.removeEventListener('play', onPlay);
+      currentAudio.removeEventListener('pause', onPause);
+      currentAudio.removeEventListener('waiting', onPause);
+      // fade out the previous thing, if necessary
+      if (transitionType == 'fade') {
+        fadeout(currentAudio);
+      }
+      previousAudio = currentAudio;
+      currentAudio = null;
+    }
+    // swap the next into current
+    currentAudio = nextAudio;
+    currentData = nextData;
+    nextAudio = null;
+    nextData = null;
+    currentAudio.addEventListener('play', onPlay);
+    currentAudio.addEventListener('pause', onPause);
+    currentAudio.addEventListener('waiting', onPause);
+    currentAudio.play();
+    currentStart = null;
+    currentTime = 0;
+    notify();
+  };
+  var onPlay = function(e) {
+    if (this != currentAudio) {
+      // buffer underrun on previousAudio
+      return;
+    }
+    currentStart = Date.now()/1000.0 - currentAudio.currentTime;
+    currentTime = null;
+    scheduleNext();
+    notify();
+  };
+  var onPause = function(e) {
+    if (this != currentAudio) {
+      // previousAudio.onPause triggered, ignore
+      return;
+    }
+    // buffer underrun or manual pause
+    currentTime = getCurrentTime();
+    currentStart = null;
+    cancelTimer();
+    notify();
+  };
+  var fadeout = function(audio) {
+    var length = 5.0;
+    var step = 0.1;
+    var interval = length / step;
+    var fadeDown = function() {
+      var vol = audio.volume;
+      vol -= step;
+      if (vol > 0) {
+        audio.volume = vol;
+        setTimeout(fadeDown, interval);
+      } else {
+        audio.currentTime = audio.duration;
+        audio.pause();
+      }
+    };
+    fadeDown();
+  };
+
+  return {
+    play: play,
+    pause: pause,
+    reset: reset,
+    subscribe: subscribe,
+    getPlayback: getPlayback,
+    setNextClip: setNextClip
+  }
+})();
+
+var musicEngine = (function(scores, playbackEngine){
   var randomChoice = function(array) {
     var index = Math.floor(Math.random() * array.length);
     return array[index];
@@ -195,7 +419,8 @@ var musicEngine = (function(scores){
   var playback = {};
   var subscribers = [];
 
-  var clear = function() {
+  var reset = function() {
+    playbackEngine.reset();
     for (var key in playback) {
       delete playback[key];
     }
@@ -207,28 +432,22 @@ var musicEngine = (function(scores){
     playback['nextChoices'] = scoreData['states'][playback['currentState']]['firstClips'];
     pickNextChoice();
   };
-  var play = function() {
-    /* Start playing audio */
-    console.log("Resuming playback");
-    if (playback['currentAudio']) {
-      if (playback['currentAudio'].paused) {
-        playback['currentAudio'].play();
-      }
-    } else if (playback['nextAudio']) { // loading the next cue
-      playback['nextAudio'].load()
-    }
-  };
-  var stop = function() {
-    /* Stop playing audio */
-    console.log("Pausing playback");
-    if (playback['currentAudio'] &&
-        !playback['currentAudio'].paused) {
-      playback['currentAudio'].pause();
-    }
-    cancelNextFuture();
-  };
   var skip = function() {
-    scheduleNextFuture(true);
+    scheduleNext(true);
+  };
+  var getPlaybackState = function() {
+    var audioPlayback = playbackEngine.getPlayback();
+    var ret = {};
+    ret['currentState'] = playback['currentState'];
+    ret['states'] = getStates();
+    ret['currentCue'] = playback['currentCue'];
+    ret['nextCue'] = playback['nextCue'];
+    ret['nextChoices'] = getChoices();
+    ret['playing'] = audioPlayback['playing'];
+    ret['currentTime'] = audioPlayback['currentTime'];
+    ret['currentDuration'] = audioPlayback['currentDuration'];
+    ret['currentFoleys'] = foleyMarkers[playback['currentCue']] || [];
+    return ret;
   };
   var getStates = function() {
     if (scoreData != null) {
@@ -275,6 +494,22 @@ var musicEngine = (function(scores){
       subscribers[i](data);
     }
   };
+
+  playbackEngine.subscribe(function() {
+    // something changed in the music engine
+    var playbackState = playbackEngine.getPlayback();
+    if (playbackState['currentData']) {
+      playback['currentCue'] = playbackState['currentData']['cue'];
+      playback['currentState'] = scoreData['cues'][playback['currentCue']]['state'];
+    }
+    if (playbackState['currentData'] && !playbackState['nextData']) { // started playing nextAudio
+      console.log("Detected the start of playback of %s", playbackState['currentData']['cue'])
+      playback['nextCue'] = null;
+      playback['nextChoices'] = null;
+      nextChoices();
+    }
+    sendNotify();
+  });
 
   var nextChoices = function() {
     /* Pick the list of choices for the next cue */
@@ -346,53 +581,37 @@ var musicEngine = (function(scores){
     scheduleNext();
     sendNotify();
   };
-  var scheduleNext = function() {
-    /* start preloading nextAudio */
-    console.log("Preloading next cue %s", playback['nextCue']);
-    var cue = scoreData['cues'][playback['nextCue']];
-    playback['nextAudio'] = document.createElement('audio');
-    playback['nextAudio'].setAttribute('preload', 'auto');
-    var formats = {'opus':'audio/ogg; codecs="opus"', 'mp3':'audio/mpeg'}
-    for (var ext in formats) {
-      var src = document.createElement('source');
-      src.setAttribute('src', cue['path'] + '.' + ext);
-      src.setAttribute('type', formats[ext]);
-      playback['nextAudio'].appendChild(src);
-    }
-    if (! playback['currentAudio']) {  // nothing is currently loaded to play
-      scheduleNextImmediately();
-    } else {  // there is something lined up
-      // if it's playing, schedule it now
-      if (playback['playing']) {
-        console.log("Currently playing, schedule next cue");
-        scheduleNextFuture();
-      };
-      // else, it will schedule when currentAudio starts playing
-    };
-  };
-  var scheduleNextImmediately = function() {
-    /* try to play nextAudio as soon as its loaded */
-    var nextAudio = playback['nextAudio'];
-    var loadListener = function() {
-      nextAudio.removeEventListener('canplay', loadListener);
-      playNext();
-    };
-    nextAudio.addEventListener('canplay', loadListener);
-    console.log("Scheduling initial playback ASAP");
-  };
-  var scheduleNextFuture = function(soon) {
-    var currentTime = Date.now()/1000.0 - playback['currentStart'];
-    var currentFoleys = foleyMarkers[playback['currentCue']];
+  var scheduleNext = function(soon) {
+    var playbackState = playbackEngine.getPlayback();
+
+    // load the data for the nextCue
     var jumpPoint = 0;
-    cancelNextFuture(); // clear out any previous timers
+    var transition = 'fade';
+    var url = scoreData['cues'][playback['nextCue']]['path'];
+    var nextData = {};
+    nextData['cue'] = playback['nextCue'];
+
+    if (!playbackState['currentData']) {
+      // first cue
+      console.log("First cue of the song");
+      playbackEngine.setNextClip(jumpPoint, url, transition, nextData);
+      return;
+    }
+
+    // decide when to schedule the nextCue
+    var currentTime = playbackState['currentTime']
+    var currentData = playbackState['currentData'] || {};
+    var currentCue = currentData['cue'];
+    var currentFoleys = foleyMarkers[currentCue] || [];
+
     if (!soon && playback['currentState'] == playback['nextState']) { // play to the end
-      playback['transition'] = 'ending';
+      transition = 'ending';
       jumpPoint = currentFoleys[currentFoleys.length-1];
     } else if (playback['currentState'].indexOf('AMBIENCE')>=0 && playback['nextState'].indexOf('AMBIENCE')>=0) {
       // cut if the next foley is later than 15 seconds
       var MAX_WAIT = 15;
       var EARLY_JUMP = 5;
-      playback['transition'] = 'fade';
+      transition = 'fade';
       for (var i=0; i<currentFoleys.length; i++) {
         if (currentFoleys[i] < currentTime) {
           continue;
@@ -412,9 +631,9 @@ var musicEngine = (function(scores){
       // find the earliest foley that is after the currentTime
       for (var i=currentFoleys.length-1; i>=0; i--) {
         if (i == currentFoleys.length-1) {
-          playback['transition'] = 'ending';
+          transition = 'ending';
         } else {
-          playback['transition'] = 'fade';
+          transition = 'fade';
         }
         if (currentFoleys[i] > currentTime) {
           jumpPoint = currentFoleys[i];
@@ -422,87 +641,13 @@ var musicEngine = (function(scores){
       }
       console.log("Cutting to next cue at %f, which is after %f", jumpPoint, currentTime);
     }
-    var delay = jumpPoint - currentTime;
-    playback['playNextTimer'] = window.setTimeout(playNext, delay*1000.0);
-    console.log("Scheduled next cue for %f", delay);
-  };
-  var cancelNextFuture = function() {
-    if (playback['playNextTimer']) {
-      window.clearTimeout(playback['playNextTimer']);
-    }
-  };
-  var playNext = function() {
-    // callbacks for start/stop
-    var onPlay = function() {
-      playback['playing'] = true;
-      playback['currentStart'] = Date.now()/1000.0 - playback['currentAudio'].currentTime;
-      console.log("Recording start time: %s", playback['currentStart']);
-      // playback started, prepare the next song
-      if (!playback['nextCue']) {
-        nextChoices();
-      } else {
-        // resume from pause, reschedule
-        scheduleNextFuture();
-      }
-      sendNotify();
-    };
-    var onPause = function(e) {
-      if (this != playback['currentAudio']) {
-        return;
-      }
-      console.log("Pause event from "+this.childNodes[0].src);
-      // buffer underrun, or manual pause
-      playback['playing'] = false;
-      playback['currentStart'] = null;
-      sendNotify();
-      cancelNextFuture();
-    };
-    if (playback['currentAudio']) {
-      // clear callbacks
-      playback['currentAudio'].removeEventListener('play', onPlay);
-      playback['currentAudio'].removeEventListener('pause', onPause);
-      playback['currentAudio'].removeEventListener('waiting', onPause);
-      // fade out the previous thing, if necessary
-      if (playback['transition'] == 'fade') {
-        fadeout(playback['currentAudio'])
-      }
-      playback['previousAudio'] = playback['currentAudio'];
-    }
-    // swap the next into current
-    console.log("Starting to play next");
-    playback['currentCue'] = playback['nextCue'];
-    playback['currentState'] = scoreData['cues'][playback['currentCue']]['state'];
-    playback['currentAudio'] = playback['nextAudio'];
-    playback['currentFoleys'] = foleyMarkers[playback['currentCue']];
-    delete playback['nextCue'];
-    delete playback['nextAudio'];
-    playback['currentAudio'].addEventListener('play', onPlay);
-    playback['currentAudio'].addEventListener('pause', onPause);
-    playback['currentAudio'].addEventListener('waiting', onPause);
-    playback['currentAudio'].play();
-    sendNotify();
-  };
-  var fadeout = function(audio) {
-    var length = 5.0;
-    var step = 0.1;
-    var interval = length / step;
-    var fadeDown = function() {
-      var vol = audio.volume;
-      vol -= step;
-      if (vol > 0) {
-        audio.volume = vol;
-        setTimeout(fadeDown, interval);
-      } else {
-        audio.currentTime = audio.duration;
-        audio.pause();
-      }
-    };
-    fadeDown();
+    console.log("Scheduling next cue %s at %f", playback['nextCue'], jumpPoint);
+    playbackEngine.setNextClip(jumpPoint, url, transition, nextData);
   };
 
   var loadScore = function(name) {
-    stop();
-    clear();
+    playbackEngine.pause();
+    reset();
     var loadingScore = scores.load(name);
     loadingScore.then(function(newData) {
       foleyMarkers = scores['foleyMarkers'];
@@ -515,17 +660,15 @@ var musicEngine = (function(scores){
   return {
     loadScore: loadScore,
     scoreData: scoreData,
-    play: play,
-    stop: stop,
+    play: playbackEngine.play,
+    pause: playbackEngine.pause,
     skip: skip,
-    getStates: getStates,
     setState: setState,
-    getChoices: getChoices,
     setChoice: setChoice,
     onNotify: onNotify,
-    playbackState: playback
+    getPlaybackState: getPlaybackState,
   };
-})(scores);
+})(scores, playbackEngine);
 
 //musicEngine.loadScore('Mission Capstone');
 musicEngine.loadScore('Uprising');
@@ -537,18 +680,19 @@ var GUI = {
   },
   animationName: 'cue-progress',
   changeChoice: function(dir) {
-    var i = musicEngine.getChoices().indexOf(musicEngine['playbackState']['nextCue']);
+    var playback = musicEngine.getPlaybackState();
+    var i = playback['nextChoices'].indexOf(playback['nextCue']);
     if (i >= 0) {
       i += dir;
-      i = Math.min(i, musicEngine['playbackState']['nextChoices'].length-1);
+      i = Math.min(i, playback['nextChoices'].length-1);
       i = Math.max(i, 0);
-      musicEngine.setChoice(musicEngine.getChoices()[i]);
+      musicEngine.setChoice(playback['nextChoices'][i]);
     }
   },
   onkey: function(e) {
     if (e.keyCode==32) { // space
-      if (musicEngine['playbackState']['playing']) {
-        musicEngine.stop();
+      if (musicEngine.getPlaybackState()['playing']) {
+        musicEngine.pause();
       } else {
         musicEngine.play();
       }
@@ -569,7 +713,7 @@ var GUI = {
     }
   },
   view: function() {
-    var playback = musicEngine['playbackState'];
+    var playback = musicEngine.getPlaybackState();
     var about = function() {
       return m('div',
         "Red Faction: Guerrilla is an open-world action game from 2009 with a unique background audio system. Instead of playing a simple loop, it arranges a set of clips into a dynamically shifting score that reacts to the game's intensity level. As the player health decreases and more enemies appear, the game plays a smooth transition to a more intense set of background music. This page is a demonstration of this dynamic soundtrack.");
@@ -587,7 +731,7 @@ var GUI = {
     };
     var playbackControls = function() {
       if (playback['playing']) {
-        return m('button', {'onclick': musicEngine.stop}, 'Pause')
+        return m('button', {'onclick': musicEngine.pause}, 'Pause')
       } else {
         return m('button', {'onclick': musicEngine.play}, 'Play')
       }
@@ -601,17 +745,18 @@ var GUI = {
     };
     var viewStates = function() {
       return m('select', {onchange: m.withAttr('value', musicEngine.setState)},
-        musicEngine.getStates().map(viewState)
+        playback['states'].map(viewState)
       );
     };
     var cueProgress = function() {
-      if (! playback['currentAudio']) {
+      if (! playback['currentTime']) {
         return null;
       }
       var setStart = false;
       if ((playback['currentCue'] != GUI.animationPrevious['name']) ||
           (Date.now() > GUI.animationPrevious['time'] + 50)) {
-        setStart = true;
+        // keep setStart until a frame has finished redrawing
+        GUI.animationPrevious['setStart'] = true;
         GUI.animationPrevious['time'] = Date.now();
         GUI.animationPrevious['name'] = playback['currentCue'];
         if (GUI.animationName == 'cue-progress') {
@@ -619,14 +764,18 @@ var GUI = {
         } else {
           GUI.animationName = 'cue-progress';
         }
-      } else if (Date.now() < GUI.animationPrevious['time'] + 20) {
+      } else if (Date.now() < GUI.animationPrevious['time'] + 50) {
         // redraw right after the previous redraw
-        setStart = true;
+        GUI.animationPrevious['setStart'] = true;
       }
+      setStart = GUI.animationPrevious['setStart'];
+      window.setTimeout(function() {
+        GUI.animationPrevious['setStart'] = false;
+      }, 10);
       var cueName = playback['currentCue'];
-      var duration = playback['currentAudio'].duration;
-      var currentTime = playback['currentAudio'].currentTime;
-      var playState = playback['currentAudio'].paused ? 'paused' : 'running';
+      var duration = playback['currentDuration'];
+      var currentTime = playback['currentTime'];
+      var playState = playback['playing'] ? 'running' : 'paused';
       var remaining = duration - currentTime;
       var currentPerc = 100.0 * currentTime / duration;
       var jumpPoints = playback['currentFoleys'].map(function(f) {
@@ -669,7 +818,7 @@ var GUI = {
       }
     };
     var viewCueChoices = function() {
-      return musicEngine.getChoices().map(viewNextCue);
+      return playback['nextChoices'].map(viewNextCue);
     };
     return m('div', [
       about(),
