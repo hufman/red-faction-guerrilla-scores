@@ -186,8 +186,137 @@ var scores = (function() {
   };
 })()
 
-var playbackEngine = (function() {
+var spoolEngine = (function() {
+  /*
+  Mobile chrome and safari have a feature where audio.play()
+  won't work until it is called inside a user-initiated event listener,
+  and each new audio object needs to be acknowledged by the user in this way.
+  So, we have to precreate a ring buffer of audio objects and
+  audio.play() all of them (silently) during the Play button press.
+  Then we can keep reusing them to play cues.
+  */
+  var subscribers = [];		// functions to call when we are spooled
   var formats = {'opus':'audio/ogg; codecs="opus"', 'mp3':'audio/mpeg'}
+  var newAudio = [];		// html5 audio clips that have not been user accepted
+  var unusedAudio = [];		// html5 audio clips that are not currently playing
+  var isSpooled = false;	// whether audio clips are allowed to play
+
+  var subscribe = function(callback) {
+    subscribers.push(callback);
+  };
+  var notify = function(data) {
+    subscribers.forEach(function (s) {
+      s(data);
+    });
+  };
+
+  var createAudio = function(url) {
+    var audio = document.createElement('audio');
+    audio.setAttribute('preload', 'auto');
+    for (var ext in formats) {
+      var src = document.createElement('source');
+      src.setAttribute('src', url + '.' + ext);
+      src.setAttribute('type', formats[ext]);
+      audio.appendChild(src);
+    }
+    return audio
+  };
+  var spoolAudio = function(url) {
+    /* needs to be run after the first setNextClip */
+    if (isSpooled) {
+      return;		// already done
+    }
+    var onPlaySpool = function(e) {
+      var audio = this;
+      audio.removeEventListener('play', onPlaySpool);
+      audio.addEventListener('pause', onPauseSpool);
+      // chrome complains if you pause/load too soon after playing??
+      window.setTimeout(function() {audio.pause();}, 300);
+    };
+    var onPauseSpool = function(e) {
+      // when a spool file has started playing
+      // which means the user has clicked play and the
+      // browser has whitelisted this audio
+      var audio = this;
+      audio.removeEventListener('pause', onPauseSpool);
+      var index = newAudio.indexOf(this);
+      if (index>=0) {
+        console.log("Finished spooling an audio");
+        newAudio.splice(index, 1);
+      } else {
+        console.warn("Trying to remove spooled newAudio twice?");
+      }
+      unusedAudio.push(audio);
+      console.log("spooled, unusedAudio size now: %f", unusedAudio.length);
+      isSpooled = true;
+      notify();
+    };
+    var neededCount = 3-(newAudio.length+unusedAudio.length);
+    for (var i=0; i<neededCount; i++) {
+      var audio = createAudio(url);
+      newAudio.push(audio);
+      audio.addEventListener('play', onPlaySpool);
+    }
+    for (var i=0; i<newAudio.length; i++) {
+      var audio = newAudio[i];
+      audio.volume = 0;
+      audio.play();
+    }
+    console.log("Spooling, newAudio size: %f", newAudio.length);
+  };
+  var borrowAudio = function(url) {
+    // returns a fresh audio object with the given url
+    // might return null if not ready
+    if (!isSpooled && newAudio.length==0) {
+      spoolAudio(url);
+      return;
+    }
+    console.log("borrowing, unusedAudio size was: %f", unusedAudio.length);
+    var audio = unusedAudio.pop();
+    if (!audio) {
+      console.warn("No unusedAudios to borrow!");
+      return;
+    }
+    //audio.pause();
+    audio.addEventListener('ended', onAudioEnd);
+    while (audio.firstChild) {
+      audio.removeChild(audio.firstChild);
+    }
+    for (var ext in formats) {
+      var src = document.createElement('source');
+      src.setAttribute('src', url + '.' + ext);
+      src.setAttribute('type', formats[ext]);
+      audio.appendChild(src);
+    }
+    audio.currentTime=0;
+    return audio;
+  };
+  var onAudioEnd = function(e) {
+    // when an audio has finished playing, return this to the queue
+    returnAudio(this);
+  }
+  var returnAudio = function(audio) {
+    // return an audio clip back to the spools
+    audio.removeEventListener('ended', onAudioEnd);
+    var alreadyIndex = unusedAudio.indexOf(audio);
+    if (alreadyIndex == -1) {
+      unusedAudio.push(audio)
+      console.log("returned, unusedAudio size now: %f", unusedAudio.length);
+    } else {
+      console.warn("Duplicate returnAudio of %s", audio.firstChild.src);
+    }
+  };
+
+  return {
+    onIsReady: subscribe,
+    isReady: function() { return isSpooled },
+    load: spoolAudio,
+    borrowAudio: borrowAudio,
+    returnAudio: returnAudio
+  }
+})();
+
+var playbackEngine = (function(spool) {
   var playing = false;		// whether we are currently playing or trying to play
   var previousAudio = null;	// any previous audio clip that is fading out
   var currentStart = null;	// time (in seconds) when the currentClip started playing
@@ -198,6 +327,7 @@ var playbackEngine = (function() {
   var transitionType = null;	// what type of transition to do, 'fade' or 'ending'
   var nextAudio = null;		// the next audio clip, that we are currently preloading
   var nextLoaded = false;	// whether the next audio clip is loaded
+  var nextUrl = null;		// what url to load next
   var nextTimer = null;		// the timer that will do nextAudio.play()
   var nextData = null;		// any supplementary data associated with the next clip
   var subscriptions = [];
@@ -212,6 +342,7 @@ var playbackEngine = (function() {
       // on initial play
       scheduleNext();
     } else {
+      spool.load();
       console.log("Next audio isn't loaded yet, won't schedule next");
     }
     notify();
@@ -227,6 +358,9 @@ var playbackEngine = (function() {
   };
   var reset = function() {
     pause();
+    if (previousAudio) spoolEngine.returnAudio(previousAudio);
+    if (currentAudio) spoolEngine.returnAudio(currentAudio);
+    if (nextAudio) spoolEngine.returnAudio(nextAudio);
     playing = false;
     previousAudio = null;
     currentStart = null;
@@ -237,6 +371,7 @@ var playbackEngine = (function() {
     transitionType = null;
     nextAudio = null;
     nextLoaded = false;
+    nextUrl = null;
     nextTimer = null;
     nextData = null;
   };
@@ -272,29 +407,40 @@ var playbackEngine = (function() {
     }
   };
   var setNextClip = function(offset, url, transition, data) {
-    // given a url without extension, start loading the next clip
-    // and schedule it at the offset into the current clip
-    if (nextAudio) {
-      nextAudio.removeEventListener('canplaythrough', onNextLoaded);
-      cancelTimer();
-    }
+    // set the next clip to play
     transitionType = transition;
     transitionTime = offset;
     nextData = data;
+    nextUrl = url;
+    // start loading it
+    loadNext();
+  };
+
+  var loadNext = function() {
+    /* needs to be run after setNextClip */
+    // after setNextClip has set the next url
+    // try loading it
+    if (nextAudio) {
+      nextAudio.removeEventListener('canplaythrough', onNextLoaded);
+      cancelTimer();
+      spoolEngine.returnAudio(nextAudio);
+      nextAudio = null;
+    }
     nextLoaded = false;
-    nextAudio = document.createElement('audio');
-    nextAudio.setAttribute('preload', 'auto');
-    for (var ext in formats) {
-      var src = document.createElement('source');
-      src.setAttribute('src', url + '.' + ext);
-      src.setAttribute('type', formats[ext]);
-      nextAudio.appendChild(src);
+    nextAudio = spoolEngine.borrowAudio(nextUrl);
+    if (!nextAudio) {
+      console.log("Haven't verified playback yet");
+      spoolEngine.onIsReady(function() {
+        if (!nextAudio) {
+          loadNext();
+        }
+      });
+      return;
     }
     console.log("Starting to load next clip");
     nextAudio.addEventListener('canplaythrough', onNextLoaded);
     nextAudio.load();
-    notify();
-  };
+  }
   var onNextLoaded = function(e) {
     console.log("Next clip is loaded");
     this.removeEventListener('canplaythrough', onNextLoaded);
@@ -408,7 +554,7 @@ var playbackEngine = (function() {
     getPlayback: getPlayback,
     setNextClip: setNextClip
   }
-})();
+})(spoolEngine);
 
 var musicEngine = (function(scores, playbackEngine){
   var randomChoice = function(array) {
