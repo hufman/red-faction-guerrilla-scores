@@ -231,7 +231,7 @@ var spoolEngine = (function() {
       audio.removeEventListener('play', onPlaySpool);
       audio.addEventListener('pause', onPauseSpool);
       // chrome complains if you pause/load too soon after playing??
-      window.setTimeout(function() {audio.pause();}, 300);
+      window.setTimeout(function() {audio.pause();}, 0);
     };
     var onPauseSpool = function(e) {
       // when a spool file has started playing
@@ -251,7 +251,7 @@ var spoolEngine = (function() {
       isSpooled = true;
       notify();
     };
-    var neededCount = 3-(newAudio.length+unusedAudio.length);
+    var neededCount = 4-(newAudio.length+unusedAudio.length);
     for (var i=0; i<neededCount; i++) {
       var audio = createAudio(url);
       newAudio.push(audio);
@@ -260,7 +260,7 @@ var spoolEngine = (function() {
     for (var i=0; i<newAudio.length; i++) {
       var audio = newAudio[i];
       audio.volume = 0;
-      audio.play();
+      audio.play().then(function(){}, function(){});
     }
     console.log("Spooling, newAudio size: %f", newAudio.length);
   };
