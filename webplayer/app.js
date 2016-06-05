@@ -550,8 +550,16 @@ var playbackEngine = (function(spool) {
       vol -= step;
       if (vol > 0) {
         audio.volume = vol;
-        setTimeout(fadeDown, interval);
+        if (audio.volume * 1.0 != 1) {
+          // working fade-out
+          setTimeout(fadeDown, interval);
+        } else {
+          // mobile safari doesn't support fading
+          audio.currentTime = audio.duration;
+          audio.pause();
+        }
       } else {
+        // faded to 0
         audio.currentTime = audio.duration;
         audio.pause();
       }
