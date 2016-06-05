@@ -16,6 +16,11 @@ var scores = (function() {
       path: 'mus_progression_01',
       file: 'mus_progression_01.mtbl'
     },
+    'Oppression': {
+      name: 'Oppression',
+      path: 'mus_progression_02',
+      file: 'mus_progression_02.mtbl'
+    },
     'Subvert': {
       name: 'Subvert',
       path: 'mus_progression_01',
