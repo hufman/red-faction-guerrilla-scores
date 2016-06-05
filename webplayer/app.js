@@ -21,6 +21,11 @@ var scores = (function() {
       path: 'mus_progression_02',
       file: 'mus_progression_02.mtbl'
     },
+    'Vindication': {
+      name: 'Vindication',
+      path: 'mus_progression_03',
+      file: 'mus_progression_03.mtbl'
+    },
     'Subvert': {
       name: 'Subvert',
       path: 'mus_progression_01',
