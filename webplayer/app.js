@@ -270,7 +270,10 @@ var spoolEngine = (function() {
     for (var i=0; i<newAudio.length; i++) {
       var audio = newAudio[i];
       audio.volume = 0;
-      audio.play().then(function(){}, function(){});
+      var promise = audio.play();
+      if (promise && promise.then) {
+        promise.then(function(){}, function(){});
+      }
     }
     console.log("Spooling, newAudio size: %f", newAudio.length);
   };
