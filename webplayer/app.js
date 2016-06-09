@@ -716,7 +716,7 @@ var musicEngine = (function(scores, playbackEngine){
     var cueData = scoreData['cues'][playback['currentCue']];
     if (cueData) {
       // amb -> amb melodic doesn't have a transition
-      // amb -> combat does have a transition
+      // amb melodic -> combat does have a transition
       // transitionsOut checks to see if the transition cue is actually
       // in the nextState
       var outs = scoreData['states'][playback['currentState']]['transitionsOut'];
@@ -789,9 +789,9 @@ var musicEngine = (function(scores, playbackEngine){
     if (!soon && playback['currentState'] == playback['nextState']) { // play to the end
       transition = 'ending';
       jumpPoint = currentFoleys[currentFoleys.length-1];
-    } else if (playback['currentState'].indexOf('AMBIENCE')>=0 && playback['nextState'].indexOf('AMBIENCE')>=0) {
-      // cut if the next foley is later than 15 seconds
-      var MAX_WAIT = 15;
+    } else if (playback['currentState'].indexOf('AMBIENCE')>=0) {
+      // cut if the next foley is later than 25 seconds
+      var MAX_WAIT = 25;
       var EARLY_JUMP = 5;
       transition = 'fade';
       for (var i=0; i<currentFoleys.length; i++) {
