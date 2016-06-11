@@ -295,7 +295,7 @@ var spoolEngine = (function() {
     };
     var neededCount = 4-(newAudio.length+unusedAudio.length);
     for (var i=0; i<neededCount; i++) {
-      var audio = createAudio(url);
+      var audio = createAudio('blank');
       newAudio.push(audio);
       audio.addEventListener('play', onPlaySpool);
     }
