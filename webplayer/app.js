@@ -674,6 +674,9 @@ var musicEngine = (function(scores, playbackEngine){
     if (!scoreData['states'].hasOwnProperty(state)) {
       throw new RangeError("Invalid state "+state);
     }
+    if (!playback['currentCue']) { // haven't started playing yet
+      playback['currentState'] = state;
+    }
     playback['nextState'] = state;
     nextChoices();
   };
@@ -736,7 +739,9 @@ var musicEngine = (function(scores, playbackEngine){
     var oldStateIndex = scoreData['statesOrder'].indexOf(playback['currentState']);
     var newStateIndex = scoreData['statesOrder'].indexOf(playback['nextState']);
 
-    if (playback['currentState'] == playback['nextState']) {
+    if (!cueData) { // no current cue
+      nextChoicesFirst();
+    } else if (playback['currentState'] == playback['nextState']) {
       nextChoicesIntraState();
     } else if (oldStateIndex > newStateIndex &&
                cueData && cueData['lullCues'].length > 0) {
@@ -744,6 +749,10 @@ var musicEngine = (function(scores, playbackEngine){
     } else {
       nextChoicesTransition();
     }
+  };
+  var nextChoicesFirst = function() {
+    playback['nextChoices'] = scoreData['states'][playback['nextState']]['firstClips'];
+    pickNextChoice();
   };
   var nextChoicesIntraState = function() {
     /* Pick the list of choices, when staying in the same state */
