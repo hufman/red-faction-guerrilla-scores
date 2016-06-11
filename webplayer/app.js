@@ -716,6 +716,11 @@ var musicEngine = (function(scores, playbackEngine){
   playbackEngine.subscribe(function() {
     // something changed in the music engine
     var playbackState = playbackEngine.getPlayback();
+    if (playbackState['currentData'] && !playbackState['nextData']) { // started playing nextAudio
+      // save the previous cue
+      playback['previousCue'] = playback['currentCue'];
+      playback['previousState'] = playback['currentState'];
+    }
     if (playbackState['currentData']) {
       playback['currentCue'] = playbackState['currentData']['cue'];
       if (playback['currentCue'].indexOf('LULL') == -1) {
@@ -739,14 +744,22 @@ var musicEngine = (function(scores, playbackEngine){
     var oldStateIndex = scoreData['statesOrder'].indexOf(playback['currentState']);
     var newStateIndex = scoreData['statesOrder'].indexOf(playback['nextState']);
 
-    if (!cueData) { // no current cue
+    if (!cueData) {
+       // no current cue
       nextChoicesFirst();
     } else if (playback['currentState'] == playback['nextState']) {
+      // staying in same state
       nextChoicesIntraState();
+    } else if (playback['currentCue'].indexOf('LULL') > -1 &&
+               playback['previousState'] == playback['nextState']) {
+      // returning to previous state before lull
+      nextChoicesResumeState();
     } else if (oldStateIndex > newStateIndex &&
                cueData && cueData['lullCues'].length > 0) {
+      // transitioning down
       nextChoicesLull();
     } else {
+      // transitioning up
       nextChoicesTransition();
     }
   };
@@ -765,6 +778,19 @@ var musicEngine = (function(scores, playbackEngine){
       pickNextChoice();
     } else {
       console.error("Cue doesn't exist in the data! " + playback['currentCue']);
+    }
+  };
+  var nextChoicesResumeState = function() {
+    /* Pick the list of choices, when staying in the same state */
+    var cueData = scoreData['cues'][playback['previousCue']];
+    if (cueData) {
+      playback['nextChoices'] = cueData['nextCues'];
+      if (playback['nextChoices'].length == 0) {
+        playback['nextChoices'] = scoreData['states'][playback['nextState']]['firstClips'];
+      }
+      pickNextChoice();
+    } else {
+      console.error("Cue doesn't exist in the data! " + playback['previousCue']);
     }
   };
   var nextChoicesLull = function() {
