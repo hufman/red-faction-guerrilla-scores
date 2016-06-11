@@ -122,11 +122,13 @@ var scores = (function() {
       mtbl['firstState'] = allElementTexts(doc, scoreNode, 'FIRST_STATE')[0];
 
       // load all the states
-      mtbl['states'] = {}	// keyed on state name
+      mtbl['states'] = {};	// keyed on state name
+      mtbl['statesOrder'] = [];	// order of states, from least to most intense
       var stateNodes = doc.evaluate('./STATE', scoreNode, null, XPathResult.ANY_TYPE, null); var stateNode;
       while ((stateNode = stateNodes.iterateNext()) != null) {
-        var state = {}
         var name = allElementTexts(doc, stateNode, 'NAME')[0];
+        mtbl['statesOrder'].push(name);
+        var state = {}
         mtbl['states'][name] = state;
         state['name'] = name;
         // first clips of the state
@@ -682,7 +684,11 @@ var musicEngine = (function(scores, playbackEngine){
     var playbackState = playbackEngine.getPlayback();
     if (playbackState['currentData']) {
       playback['currentCue'] = playbackState['currentData']['cue'];
-      playback['currentState'] = scoreData['cues'][playback['currentCue']]['state'];
+      if (playback['currentCue'].indexOf('LULL') == -1) {
+        playback['currentState'] = scoreData['cues'][playback['currentCue']]['state'];
+      } else {
+        playback['currentState'] = playback['nextState'];
+      }
     }
     if (playbackState['currentData'] && !playbackState['nextData']) { // started playing nextAudio
       console.log("Detected the start of playback of %s", playbackState['currentData']['cue'])
@@ -695,8 +701,15 @@ var musicEngine = (function(scores, playbackEngine){
 
   var nextChoices = function() {
     /* Pick the list of choices for the next cue */
+    var cueData = scoreData['cues'][playback['currentCue']];
+    var oldStateIndex = scoreData['statesOrder'].indexOf(playback['currentState']);
+    var newStateIndex = scoreData['statesOrder'].indexOf(playback['nextState']);
+
     if (playback['currentState'] == playback['nextState']) {
       nextChoicesIntraState();
+    } else if (oldStateIndex > newStateIndex &&
+               cueData && cueData['lullCues'].length > 0) {
+      nextChoicesLull();
     } else {
       nextChoicesTransition();
     }
@@ -706,6 +719,18 @@ var musicEngine = (function(scores, playbackEngine){
     var cueData = scoreData['cues'][playback['currentCue']];
     if (cueData) {
       playback['nextChoices'] = cueData['nextCues'];
+      if (playback['nextChoices'].length == 0) {
+        playback['nextChoices'] = scoreData['states'][playback['nextState']]['firstClips'];
+      }
+      pickNextChoice();
+    } else {
+      console.error("Cue doesn't exist in the data! " + playback['currentCue']);
+    }
+  };
+  var nextChoicesLull = function() {
+    var cueData = scoreData['cues'][playback['currentCue']];
+    if (cueData) {
+      playback['nextChoices'] = cueData['lullCues'];
       pickNextChoice();
     } else {
       console.error("Cue doesn't exist in the data! " + playback['currentCue']);
