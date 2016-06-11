@@ -653,6 +653,7 @@ var musicEngine = (function(scores, playbackEngine){
     var audioPlayback = playbackEngine.getPlayback();
     var ret = {};
     ret['currentState'] = playback['currentState'];
+    ret['nextState'] = playback['nextState'];
     ret['states'] = getStates();
     ret['currentCue'] = playback['currentCue'];
     ret['nextCue'] = playback['nextCue'];
