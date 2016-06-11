@@ -16,15 +16,45 @@ var scores = (function() {
       path: 'mus_progression_01',
       file: 'mus_progression_01.mtbl'
     },
+    'Uprising (Day)': {
+      name: 'Uprising (Day)',
+      path: 'mus_progression_01',
+      file: 'mus_progression_01_day.mtbl'
+    },
+    'Uprising (Night)': {
+      name: 'Uprising (Night)',
+      path: 'mus_progression_01',
+      file: 'mus_progression_01_night.mtbl'
+    },
     'Oppression': {
       name: 'Oppression',
       path: 'mus_progression_02',
       file: 'mus_progression_02.mtbl'
     },
+    'Oppression (Day)': {
+      name: 'Oppression (Day)',
+      path: 'mus_progression_02',
+      file: 'mus_progression_02_day.mtbl'
+    },
+    'Oppression (Night)': {
+      name: 'Oppression (Night)',
+      path: 'mus_progression_02',
+      file: 'mus_progression_02_night.mtbl'
+    },
     'Vindication': {
       name: 'Vindication',
       path: 'mus_progression_03',
       file: 'mus_progression_03.mtbl'
+    },
+    'Vindication (Day)': {
+      name: 'Vindication (Day)',
+      path: 'mus_progression_03',
+      file: 'mus_progression_03_day.mtbl'
+    },
+    'Vindication (Night)': {
+      name: 'Vindication (Night)',
+      path: 'mus_progression_03',
+      file: 'mus_progression_03_night.mtbl'
     },
     'Subvert': {
       name: 'Subvert',
