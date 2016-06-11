@@ -755,7 +755,8 @@ var musicEngine = (function(scores, playbackEngine){
       // returning to previous state before lull
       nextChoicesResumeState();
     } else if (oldStateIndex > newStateIndex &&
-               cueData && cueData['lullCues'].length > 0) {
+               cueData && cueData['lullCues'].length > 0 &&
+               scoreData['path'].indexOf('mus_progression_01') == -1) {
       // transitioning down
       nextChoicesLull();
     } else {
