@@ -963,7 +963,10 @@ var GUI = {
     var playback = musicEngine.getPlaybackState();
     var about = function() {
       return m('div',
-        "Red Faction: Guerrilla is an open-world action game from 2009 with a unique background audio system. Instead of playing a simple loop, it arranges a set of clips into a dynamically shifting score that reacts to the game's intensity level. As the player health decreases and more enemies appear, the game plays a smooth transition to a more intense set of background music. This page is a demonstration of this dynamic soundtrack.");
+        m('p', "Red Faction: Guerrilla is an open-world action game from 2009 with a unique background audio system. Instead of playing a simple loop, it arranges a set of clips into a dynamically shifting score that reacts to the game's intensity level. As the player health decreases and more enemies appear, the game plays a smooth transition to a more intense set of background music. This page is a demonstration of this dynamic soundtrack."),
+        m('p', "There are two main types of scores in this game, corresponding to the two main types of gameplay. When performing a mission, the music will start out at a medium pace, and play this first version in a continuous loop. After reaching a certain point in the mission, the music will play a transition cue and then play an intense music loop, which continues to the end of the mission."),
+        m('p', "While roaming around the open world between missions, the game will play one of three progressions, depending on the player's progress through the entire game. These are titled Uprising, Oppression, and Vindication. These scores have a much more interesting structure than the mission music. Each cue has a list of which cues should be played next, and optionally gives a random weighting. Not only does the level music have transitions for going up, but it also has lull clips to play during short breaks in combat.")
+      );
     };
     var scoreSelector = function() {
       return m('select', {onchange: m.withAttr('value', musicEngine.loadScore)},
