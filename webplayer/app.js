@@ -306,7 +306,10 @@ var spoolEngine = (function() {
       unusedAudio.push(audio);
       console.log("spooled, unusedAudio size now: %f", unusedAudio.length);
       isSpooled = true;
-      notify();
+      // if all of the spools are loaded
+      if (newAudio.length == 0) {
+        notify();
+      }
     };
     var neededCount = 4-(newAudio.length+unusedAudio.length);
     for (var i=0; i<neededCount; i++) {
@@ -502,14 +505,9 @@ var playbackEngine = (function(spool) {
     nextAudio.load();
   }
   var onNextLoaded = function(e) {
-    console.log("Next clip is loaded");
+    console.log("Next clip is loaded: %s", this.firstChild.src);
     this.removeEventListener('canplaythrough', onNextLoaded);
     nextLoaded = true;
-    // make sure the file is ready to go
-    this.volume = 0;
-    this.play();
-    this.pause();
-    this.currentTime = 0;
     this.volume = 1;
     if (playing) {
       console.log("Scheduling next clip");
@@ -522,10 +520,12 @@ var playbackEngine = (function(spool) {
   var scheduleNext = function() {
     if (!nextAudio ||		// currentAudio.onPlay caused a new currentTime
         !nextLoaded) {	// before we finished loading nextAudio
+      console.log("Still loading nextAudio, must wait before scheduling");
       return;			// wait for onNextLoaded to trigger this
     }
     cancelTimer();
     if (!currentAudio) {	// no loaded cue, start immediately
+      console.log("Scheduling next cue to play immediately");
       nextTimer = window.setTimeout(playNext, 0);
     } else {
       var currentTime = getCurrentTime();	// time into the clip
@@ -542,6 +542,7 @@ var playbackEngine = (function(spool) {
   };
 
   var playNext = function() {
+    console.log("Starting to play %s", nextAudio.firstChild.src);
     if (currentAudio) {
       // clear callbacks
       currentAudio.removeEventListener('play', onPlay);
@@ -563,6 +564,7 @@ var playbackEngine = (function(spool) {
     currentAudio.addEventListener('pause', onPause);
     currentAudio.addEventListener('waiting', onPause);
     currentAudio.play();
+    window.setTimeout(onSlowPlay, 200);
     currentStart = null;
     currentTime = 0;
     notify();
@@ -572,6 +574,7 @@ var playbackEngine = (function(spool) {
       // buffer underrun on previousAudio
       return;
     }
+    console.log("Audio onPlay: %s", this.firstChild.src);
     currentStart = Date.now()/1000.0 - currentAudio.currentTime;
     currentTime = null;
     scheduleNext();
@@ -580,13 +583,24 @@ var playbackEngine = (function(spool) {
   var onPause = function(e) {
     if (this != currentAudio) {
       // previousAudio.onPause triggered, ignore
+      // except on mobile safari if the next audio has started playing
+      // it won't call onEnded, so we have to manually return to the spool
+      spoolEngine.returnAudio(this);
       return;
     }
     // buffer underrun or manual pause
+    console.log("Audio onPause: %s", this.firstChild.src);
     currentTime = getCurrentTime();
     currentStart = null;
     cancelTimer();
     notify();
+  };
+  var onSlowPlay = function() {
+    // has currentAudio started playing?
+    if (currentAudio && currentAudio.paused) {
+      console.warn("Why hasn't currentAudio started playing yet? %s", currentAudio.firstChild.src);
+      //currentAudio.play();
+    }
   };
   var fadeout = function(audio) {
     var length = 5.0;
@@ -1003,12 +1017,20 @@ var GUI = {
   },
   view: function() {
     var playback = musicEngine.getPlaybackState();
+    var aboutMobileSafari = function() {
+      var mobileSafari = /(iPad|iPod|iPhone).*Safari/;
+      if (navigator.userAgent.match(mobileSafari)) {
+        return m('p', "Note: Mobile Safari does not support multiple HTML5 Audio clips playing at the same time. This may cause timings to not line up perfectly. Please try Mobile Chrome, Mobile Firefox, or any desktop browser besides Internet Explorer for a better experience.");
+      }
+      return null;
+    };
     var about = function() {
       return m('div',
         m('p', "Red Faction: Guerrilla is an open-world action game from 2009 with a unique background audio system. Instead of playing a simple loop, it arranges a set of clips into a dynamically shifting score that reacts to the game's intensity level. As the player health decreases and more enemies appear, the game plays a smooth transition to a more intense set of background music. This page is a demonstration of this dynamic soundtrack."),
         m('p', "There are two main types of scores in this game, corresponding to the two main types of gameplay. When performing a mission, the music will start out at a medium pace, and play this first version in a continuous loop. After reaching a certain point in the mission, the music will play a transition cue and then play an intense music loop, which continues to the end of the mission."),
         m('p', "While roaming around the open world between missions, the game will play one of three progressions, depending on the player's progress through the entire game. These are titled Uprising, Oppression, and Vindication. These scores have a much more interesting structure than the mission music. Each cue has a list of which cues should be played next, and optionally gives a random weighting. Not only does the level music have transitions for going up, but it also has lull clips to play during short breaks in combat."),
-        m('p', "The main world music has different variations (Day, Night, Marauder) which specify a different set of calm music.")
+        m('p', "The main world music has different variations (Day, Night, Marauder) which specify a different set of calm music."),
+        aboutMobileSafari()
       );
     };
     var scoreSelector = function() {
