@@ -4911,6 +4911,21 @@
 			</Marker>
 		</File>
 	<File>
+		<Name>MUS_PROG1_COMBAT_LIGHT_03</Name>
+		<Number_of_markers>2</Number_of_markers>
+		<Total_text_size>4</Total_text_size>
+		<Marker>
+			<Time_Offset>9142</Time_Offset>
+			<Sample_Offset>403200</Sample_Offset>
+			<Text>F</Text>
+			</Marker>
+		<Marker>
+			<Time_Offset>18285</Time_Offset>
+			<Sample_Offset>806400</Sample_Offset>
+			<Text>E</Text>
+			</Marker>
+		</File>
+	<File>
 		<Name>MUS_PROG1_COMBAT_LIGHT_04</Name>
 		<Number_of_markers>4</Number_of_markers>
 		<Total_text_size>8</Total_text_size>
