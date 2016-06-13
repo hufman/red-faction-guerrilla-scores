@@ -49,6 +49,12 @@ onmessage = function (event) {\
 		lastFakeId = 0,
 		maxFakeId = 0x7FFFFFFF, // 2 ^ 31 - 1, 31 bit, positive values of signed 32 bit integer
 		logPrefix = 'HackTimer.js by turuslan: ';
+
+	if (navigator.userAgent.match(/Android/i)) {
+		console.log (logPrefix + 'Initialisation skipped on mobile');
+		return;
+	}
+
 	if (typeof (Worker) !== 'undefined') {
 		function getFakeId () {
 			do {
