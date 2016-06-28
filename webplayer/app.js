@@ -1015,6 +1015,9 @@ var GUI = {
         m('p', "There are two main types of scores in this game, corresponding to the two main types of gameplay. When performing a mission, the music will start out at a medium pace, and play this first version in a continuous loop. After reaching a certain point in the mission, the music will play a transition cue and then play an intense music loop, which continues to the end of the mission."),
         m('p', "While roaming around the open world between missions, the game will play one of three progressions, depending on the player's progress through the entire game. These are titled Uprising, Oppression, and Vindication. These scores have a much more interesting structure than the mission music. Each cue has a list of which cues should be played next, and optionally gives a random weighting. Not only does the level music have transitions for going up, but it also has lull clips to play during short breaks in combat."),
         m('p', "The main world music has different variations (Day, Night, Marauder) which specify a different set of calm music. The Day variation matches the official soundtrack's Ambient songs."),
+        m('h4', "About This Page"),
+        m('p', "The currently-playing cue shows little blue tick marks at each position that the engine is allowed to jump to the next cue. By default, the last jump point will be used. Alternatively, the next jump point available will be used if the State is changed, or if the user presses Enter to jump early. The list of the next possible Cues are shown, with a green border around the currently-selected option. These are clickable, or can be chosen with the left and right arrows on the keyboard."),
+        m('p', "Some of the behavior of this page is guessed, based on observations from the soundtrack and deduced clues from the script files. Additionally, some of the cue clips referenced from the scripts have not been located, such as the lull clips from Uprising. Feedback is greatly appreciated! No copyright infringement is intended, this page is to show appreciation for this interesting music system."),
         aboutMobileSafari()
       );
     };
@@ -1131,7 +1134,8 @@ var GUI = {
       m('p', "Current cue:"),
       cueProgress(),
       m('p', "Next cue:"),
-      viewCueChoices()
+      viewCueChoices(),
+      m('div.footer')
     ]);
   }
 };

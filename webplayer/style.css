@@ -46,3 +46,8 @@ button {
     width: 100%;
   }
 }
+
+.footer {
+  display: black;
+  height: 5in;
+}
