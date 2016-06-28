@@ -1,3 +1,7 @@
+button {
+  width: 2cm;
+  height: 1.2cm;
+}
 .cue {
   display: inline-block;
   padding: 10px;
