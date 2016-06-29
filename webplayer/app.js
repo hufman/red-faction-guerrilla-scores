@@ -80,6 +80,11 @@ var scores = (function() {
       name: 'Mission Final',
       path: 'mus_progression_01',
       file: 'mus_mission_final.mtbl'
+    },
+    'Demolitions Master': {
+      name: 'Demolitions Master',
+      path: 'mus_demomaster',
+      file: 'mus_demomaster.mtbl'
     }
   };
   var list = Object.keys(songs);
