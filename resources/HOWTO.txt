@@ -1,0 +1,3 @@
+Copy the following resources from Red Faction Guerrilla\build\pc\cache
+Put sounds_r.vpp_pc here
+Put 
