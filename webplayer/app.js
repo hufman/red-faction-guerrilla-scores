@@ -495,10 +495,34 @@ var playbackEngine = (function(spool) {
     nextAudio.load();
   }
   var onNextLoaded = function(e) {
+    // called when the browser thinks it is ready to go
     console.log("Next clip is loaded: %s", this.firstChild.src);
     this.removeEventListener('canplaythrough', onNextLoaded);
     nextLoaded = true;
-    this.volume = 1;
+    // make sure the file is actually ready to go
+    if (window.navigator.userAgent.match(/iPad/i) ||
+        window.navigator.userAgent.match(/iPhone/i)) {
+      // mobile safari would cancel the current track if we
+      // try to play another track, so skip this preload logic
+      this.volume = 1;
+      onNextReady();
+    } else {
+      this.volume = 0;
+      var onLoadedPlay = function() {
+        console.log("Next clip is seeked to 0: %s", this.firstChild.src);
+        this.removeEventListener('play', onLoadedPlay);
+        this.pause();
+        this.currentTime = 0;
+        this.volume = 1;
+        onNextReady();
+      };
+      onLoadedPlay = onLoadedPlay.bind(this);
+      this.addEventListener('play', onLoadedPlay);
+      this.play();
+    }
+  };
+  var onNextReady = function() {
+    // we declare that the clip is ready for scheduling!
     if (playing) {
       console.log("Scheduling next clip");
       scheduleNext();
@@ -520,7 +544,7 @@ var playbackEngine = (function(spool) {
     } else {
       var currentTime = getCurrentTime();	// time into the clip
       var delay = transitionTime - currentTime;
-      console.log("Next cue is ready to play in %f", delay);
+      console.log("Next cue %s is ready to play in %f", nextAudio.firstChild.src, delay);
       nextTimer = window.setTimeout(playNext, delay*1000.0);
     }
   };
