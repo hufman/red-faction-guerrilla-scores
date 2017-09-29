@@ -122,7 +122,7 @@ var scores = (function() {
   };
   var loadingFoleyMarkers = loadFoleyMarkers();
 
-  var loadScore = function(name) {
+  var loadScoreFromServer = function(name) {
     var scoreMetadata = songs[name];
     var path = scoreMetadata['path'];
     var score = scoreMetadata['file'];
@@ -223,13 +223,148 @@ var scores = (function() {
 
       return mtbl;
     });
-    return PromiseAll(loadingFoleyMarkers, loadingScore);
+    return loadingScore;
+  };
+
+  // expand a list of strings into a full Cue Choice description
+  var expandCueChoices = function(strList) {
+    var cueList = [];
+    for (var i=0; i<strList.length; i++) {
+      var str = strList[i];
+      var cue = {};
+      cue['name'] = str;
+      cue['weight'] = 1;
+      cue['probability'] = 1.0 / strList.length;
+      cueList.push(cue);
+    }
+    return cueList;
+  };
+
+  // converts from state-centric to clip-centric data structure
+  var convertScore = function(mtbl) {
+    var score = {
+      'firstState': '',
+      'statesOrder': [],
+      'states': {},
+      'cues': {}
+    };
+    // get state info
+    score['firstState'] = mtbl['firstState'];
+    for (var i=0; i<mtbl['statesOrder'].length; i++) {
+      var stateName = mtbl['statesOrder'][i];
+      var mtblState = mtbl['states'][stateName];
+      score['statesOrder'].push(stateName);
+      var state = {}
+      score['states'][stateName] = state;
+      state['name'] = stateName;
+      state['firstClips'] = expandCueChoices(mtblState['firstClips']);
+    }
+    // create all the cues
+    for (var name in mtbl['cues']) {
+      var mtblCue = mtbl['cues'][name];
+      var cue = {};
+      score['cues'][name] = cue;
+      cue['name'] = name;
+      cue['path'] = mtblCue['path'];
+      cue['file'] = mtblCue['file'];
+      cue['state'] = mtblCue['state'];
+      if (name.indexOf('_TRAN_') != -1) {
+        // transition clips have the previous state as their state
+        // but i want them to actually have the destination state
+        var stateIndex = score['statesOrder'].indexOf(cue['state']);
+        cue['state'] = score['statesOrder'][stateIndex+1];
+      }
+    }
+    // link the cues
+    for (var name in mtbl['cues']) {
+      var mtblCue = mtbl['cues'][name];
+      var cue = score['cues'][name];
+      var stateIndex = score['statesOrder'].indexOf(cue['state']);
+      cue['jumpPoints'] = foleyMarkers[name];
+      // set up transitions
+      cue['nextStates'] = {}
+      // handle current state
+      var nextState = {};
+      nextState['name'] = cue['state'];
+      nextState['cues'] = mtblCue['nextCues'];
+      cue['nextStates'][nextState['name']] = nextState;
+      // handle up state
+      if (name.indexOf('_TRAN_') == -1 && name.indexOf('_LULL_') == -1 && stateIndex+1 < score['statesOrder'].length) {
+        if (mtbl['states'][cue['state']]['transitionsOut'].hasOwnProperty(name)) {
+          var upState = {};
+          upState['name'] = score['statesOrder'][stateIndex+1];
+          upState['cues'] = expandCueChoices(mtbl['states'][cue['state']]['transitionsOut'][name]);
+          cue['nextStates'][upState['name']] = upState;
+        }
+      }
+    }
+    // assign the Lull clips
+    for (var name in mtbl['cues']) {
+      var mtblCue = mtbl['cues'][name];
+      var cue = score['cues'][name];
+      var stateIndex = score['statesOrder'].indexOf(cue['state']);
+      // handle down state
+      if (name.indexOf('_PROG1_') == -1 && mtblCue['lullCues'].length > 0) {
+        for (var l=0; l<mtblCue['lullCues'].length; l++) {
+          var mtblLullCue = mtblCue['lullCues'][l];
+          var lullCue = {};
+          // prepare downState
+          var downState;
+          var lullState = mtbl['cues'][mtblLullCue['name']]['state'];
+          if (!cue['nextStates'].hasOwnProperty(lullState)) {
+            downState = {};
+            downState['name'] = lullState;
+            downState['cues'] = [];
+            cue['nextStates'][downState['name']] = downState;
+          } else {
+            downState = cue['nextStates'][downState['name']];
+          }
+          // create a fake cue transition
+          lullCue['name'] = mtblLullCue['name'] + '_FROM_' + name;
+          lullCue['weight'] = mtblLullCue['weight'];
+          lullCue['probability'] = mtblLullCue['probability'];
+          downState['cues'].push(lullCue);
+          // clone the actual LULL cue to a fake one that returns back
+          var origLullCue = score['cues'][mtblLullCue['name']];
+          var newLullCue = {};
+          newLullCue['name'] = origLullCue['name'] + '_FROM_' + name;
+          newLullCue['state'] = origLullCue['state'];
+          newLullCue['jumpPoints'] = origLullCue['jumpPoints'];
+          newLullCue['file'] = origLullCue['file'];
+          newLullCue['path'] = origLullCue['path'];
+          newLullCue['nextStates'] = {}
+          // continue to ambient after lull
+          if (origLullCue['nextStates'][newLullCue['state']].length > 0) {
+            newLullCue['nextStates'][newLullCue['state']] = origLullCue['nextStates'][newLullCue['state']]
+          } else {
+            var destState = {};
+            destState['name'] = newLullCue['state'];
+            destState['cues'] = expandCueChoices(mtbl['states'][newLullCue['state']]['transitionsIn'][cue['state']]);
+            newLullCue['nextStates'][destState['name']] = destState;
+          }
+          // jump back to combat
+          newLullCue['nextStates'][cue['state']] = cue['nextStates'][cue['state']]
+          score['cues'][newLullCue['name']] = newLullCue;
+        } // for in lullCues
+      } // if lullCues
+      // make some fake transitions, if there are no Lulls
+      if (name.indexOf('_LULL_') == -1 && stateIndex-1 >= 0 && (name.indexOf('_PROG1_') != -1 || mtblCue['lullCues'].length == 0)) {
+        var downState = {};
+        downState['name'] = score['statesOrder'][stateIndex-1];
+        downState['cues'] = expandCueChoices(mtbl['states'][downState['name']]['transitionsIn'][cue['state']]);
+        cue['nextStates'][downState['name']] = downState;
+      } // if not LULL
+    } // for in cues
+    return score;
+  };
+
+  var loadScore = function(name) {
+    return PromiseAll(loadingFoleyMarkers, loadScoreFromServer(name)).then(convertScore);
   };
 
   return {
     list: list,
     load: loadScore,
-    foleyMarkers: foleyMarkers
   };
 })()
 
@@ -629,14 +764,7 @@ var playbackEngine = (function(spool) {
 })(spoolEngine);
 
 var musicEngine = (function(scores, playbackEngine){
-  var randomChoice = function(array) {
-    var index = Math.floor(Math.random() * array.length);
-    return array[index];
-  };
   var randomWeightedChoice = function(array) {
-    if (!array[0].probability) {
-      return randomChoice(array);
-    }
     var probable = Math.random();
     for (var i=0; i<array.length; i++) {
       probable = probable - array[i].probability;
@@ -647,7 +775,6 @@ var musicEngine = (function(scores, playbackEngine){
     return array[array.length - 1]['name'];
   };
 
-  var foleyMarkers = scores['foleyMarkers'];
   var scoreData = null;
   var playback = {};
   var subscribers = [];
@@ -673,14 +800,20 @@ var musicEngine = (function(scores, playbackEngine){
     var ret = {};
     ret['currentState'] = playback['currentState'];
     ret['nextState'] = playback['nextState'];
-    ret['states'] = getStates();
+    ret['allStates'] = getStates();
+    ret['nextStates'] = getNextStates();
     ret['currentCue'] = playback['currentCue'];
     ret['nextCue'] = playback['nextCue'];
     ret['nextChoices'] = getChoices();
     ret['playing'] = audioPlayback['playing'];
     ret['currentTime'] = audioPlayback['currentTime'];
     ret['currentDuration'] = audioPlayback['currentDuration'];
-    ret['currentFoleys'] = foleyMarkers[playback['currentCue']] || [];
+    if (scoreData['cues'][playback['currentCue']] &&
+        scoreData['cues'][playback['currentCue']]['jumpPoints']) {
+      ret['currentFoleys'] = scoreData['cues'][playback['currentCue']]['jumpPoints'];
+    } else {
+      ret['currentFoleys'] = [];
+    }
     return ret;
   };
   var getStates = function() {
@@ -689,9 +822,22 @@ var musicEngine = (function(scores, playbackEngine){
     }
     return [];
   };
+  var getNextStates = function() {
+    if (playback['currentCue'] != null) {
+      return Object.keys(scoreData['cues'][playback['currentCue']]['nextStates']);
+    } else {
+      return getStates();
+    }
+  };
   var setState = function(state) {
     if (!scoreData['states'].hasOwnProperty(state)) {
       throw new RangeError("Invalid state "+state);
+    }
+    if (playback['currentCue']) { // if we are playing, only allow possible branches
+      var possibleStates = scoreData['cues'][playback['currentCue']]['nextStates'];
+      if (!possibleStates.hasOwnProperty(state)) {
+        return; // don't change currentState
+      }
     }
     if (!playback['currentCue']) { // haven't started playing yet
       playback['currentState'] = state;
@@ -700,14 +846,10 @@ var musicEngine = (function(scores, playbackEngine){
     nextChoices();
   };
   var getChoices = function() {
-    var ret = []
+    var ret = [];
     for (var i=0; i<(playback['nextChoices'] || []).length; i++) {
       var cue = playback['nextChoices'][i];
-      if (cue.hasOwnProperty('probability')) {
-        ret.push(cue['name']);
-      } else {
-        ret.push(cue);
-      }
+      ret.push(cue['name']);
     }
     return ret;
   };
@@ -765,106 +907,11 @@ var musicEngine = (function(scores, playbackEngine){
 
     if (!cueData) {
        // no current cue
-      nextChoicesFirst();
-    } else if (playback['currentState'] == playback['nextState']) {
-      // staying in same state
-      nextChoicesIntraState();
-    } else if (playback['currentCue'].indexOf('LULL') > -1 &&
-               playback['previousState'] == playback['nextState']) {
-      // returning to previous state before lull
-      nextChoicesResumeState();
-    } else if (oldStateIndex > newStateIndex &&
-               cueData && cueData['lullCues'].length > 0 &&
-               scoreData['path'].indexOf('mus_progression_01') == -1) {
-      // transitioning down
-      nextChoicesLull();
+      playback['nextChoices'] = scoreData['states'][playback['nextState']]['firstClips'];
     } else {
-      // transitioning up
-      nextChoicesTransition();
+      playback['nextChoices'] = cueData['nextStates'][playback['nextState']]['cues'];
     }
-  };
-  var nextChoicesFirst = function() {
-    playback['nextChoices'] = scoreData['states'][playback['nextState']]['firstClips'];
     pickNextChoice();
-  };
-  var nextChoicesIntraState = function() {
-    /* Pick the list of choices, when staying in the same state */
-    var cueData = scoreData['cues'][playback['currentCue']];
-    if (cueData) {
-      playback['nextChoices'] = cueData['nextCues'];
-      if (playback['nextChoices'].length == 0) {
-        playback['nextChoices'] = scoreData['states'][playback['nextState']]['firstClips'];
-      }
-      pickNextChoice();
-    } else {
-      console.error("Cue doesn't exist in the data! " + playback['currentCue']);
-    }
-  };
-  var nextChoicesResumeState = function() {
-    /* Pick the list of choices, when staying in the same state */
-    var cueData = scoreData['cues'][playback['previousCue']];
-    if (cueData) {
-      playback['nextChoices'] = cueData['nextCues'];
-      if (playback['nextChoices'].length == 0) {
-        playback['nextChoices'] = scoreData['states'][playback['nextState']]['firstClips'];
-      }
-      pickNextChoice();
-    } else {
-      console.error("Cue doesn't exist in the data! " + playback['previousCue']);
-    }
-  };
-  var nextChoicesLull = function() {
-    var cueData = scoreData['cues'][playback['currentCue']];
-    if (cueData) {
-      playback['nextChoices'] = cueData['lullCues'];
-      pickNextChoice();
-    } else {
-      console.error("Cue doesn't exist in the data! " + playback['currentCue']);
-    }
-  };
-  var nextChoicesTransition = function() {
-    /* Pick the list of choices, when transitioning to a new state */
-    var cueData = scoreData['cues'][playback['currentCue']];
-    if (cueData) {
-      // amb -> amb melodic doesn't have a transition
-      // amb melodic -> combat does have a transition
-      // transitionsOut checks to see if the transition cue is actually
-      // in the nextState
-      var outs = scoreData['states'][playback['currentState']]['transitionsOut'];
-      var outClips = outs[playback['currentCue']] || [];
-      var validOuts = [];
-      if (outClips.length > 0) {
-        // moving from normal to a transition
-        for (var i=0; i<outClips.length; i++) {
-          var outClipName = outClips[i];
-          var outClipData = scoreData['cues'][outClipName];
-          var outClipNextName = outClipData['nextCues'][0]['name'];
-          if (scoreData['cues'][outClipNextName]['state'] == playback['nextState']) {
-            validOuts.push(outClips[i]);
-          }
-        }
-      } else {
-        // finishing a transition
-        var nextCue = cueData['nextCues'][0] || {};
-        var nextCueName = nextCue['name'];
-        var nextCueData = scoreData['cues'][nextCueName] || {};
-        if (nextCueData['state'] == playback['nextState']) {
-          validOuts = cueData['nextCues'];
-        }
-      }
-      // if we have transitions, use them
-      // otherwise, just pick from transitionsIn
-      if (validOuts.length > 0) {
-        playback['nextChoices'] = validOuts;
-      } else {
-        console.log("No transitions found from %s to %s", playback['currentState'], playback['nextState']);
-        var nextState = scoreData['states'][playback['nextState']];
-        playback['nextChoices'] = nextState['transitionsIn'][playback['currentState']];
-      }
-      pickNextChoice();
-    } else {
-      console.error("Cue doesn't exist in the data! " + playback['currentCue']);
-    }
   };
   var pickNextChoice = function() {
     /* Pick out the next cue to play */
@@ -895,7 +942,7 @@ var musicEngine = (function(scores, playbackEngine){
     var currentTime = playbackState['currentTime']
     var currentData = playbackState['currentData'] || {};
     var currentCue = currentData['cue'];
-    var currentFoleys = foleyMarkers[currentCue] || [];
+    var currentFoleys = scoreData['cues'][currentCue]['jumpPoints'] || [];
 
     if (!soon && playback['currentState'] == playback['nextState']) { // play to the end
       transition = 'ending';
@@ -943,10 +990,9 @@ var musicEngine = (function(scores, playbackEngine){
     reset();
     var loadingScore = scores.load(name);
     loadingScore.then(function(newData) {
-      foleyMarkers = scores['foleyMarkers'];
       scoreData = newData;
       init();
-      play();
+      //playbackEngine.play();
     });
   };
 
@@ -1045,15 +1091,18 @@ var GUI = {
       }
     };
     var viewState = function(statename) {
+      var attrs = {'value':statename};
       if (statename == playback['nextState']) {
-        return m('option', {'value':statename, 'selected': true}, statename);
-      } else {
-        return m('option', {'value':statename}, statename);
+        attrs['selected'] = true;
       }
+      if (playback['nextStates'].indexOf(statename) == -1) {
+        attrs['disabled'] = true;
+      }
+      return m('option', attrs, statename);
     };
     var viewStates = function() {
       return m('select', {onchange: m.withAttr('value', musicEngine.setState)},
-        playback['states'].map(viewState)
+        playback['allStates'].map(viewState)
       );
     };
     var cueProgress = function() {
